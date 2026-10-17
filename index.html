@@ -99,7 +99,19 @@ tr.sorted td{background:var(--bluebg)}
 .top{display:flex;align-items:center;gap:18px;flex-wrap:wrap;margin-bottom:16px}
 .brand{font-size:22px;font-weight:700;letter-spacing:-.02em}
 .brand span{color:var(--gold)}
-nav{display:flex;gap:4px;flex-wrap:wrap}
+nav{display:flex;gap:4px;flex-wrap:wrap;flex:1}
+nav a.end{margin-left:auto}
+.tt .nm{font-size:14px}
+.grow{display:inline-flex;gap:6px;white-space:nowrap}
+.grow>span{display:inline-flex;gap:3px;min-width:34px}
+.gl{color:var(--mut)}
+.gz{color:var(--mut)}
+.tfrow{display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end}
+details.fgrp{border:1px solid var(--line2);border-radius:8px;background:var(--panel2);padding:6px 10px;margin:0;min-width:120px}
+details.fgrp summary{font-size:12.5px;color:var(--sub)}
+details.fgrp[open]{padding-bottom:8px}
+.fbody{display:flex;flex-wrap:wrap;gap:4px 12px;margin-top:6px;align-items:center}
+label.ck{display:inline-flex;align-items:center;text-transform:none;letter-spacing:0;font-size:12.5px;font-weight:500;color:var(--tx);margin:0;cursor:pointer}
 nav a{padding:6px 12px;border-radius:8px;color:var(--sub);text-decoration:none;font-size:13px;font-weight:600;border:1px solid transparent}
 nav a:hover{color:var(--tx);border-color:var(--line2)}
 nav a.on{color:var(--blue);background:var(--bluebg);border-color:rgba(77,159,255,.3)}
@@ -254,7 +266,10 @@ function save() {
   }
 }
 let root = load();
-const UI = {tq: "", tOwn: "all", tDist: "", tSty: "", tSort: ["name", 1],
+const UI = {tq: "", tOwn: "all", tSort: ["name", 1],
+            tf: {surf: {on: [], g: "A", any: false, open: false},
+                 dist: {on: [], g: "A", any: false, open: false},
+                 sty:  {on: [], g: "A", any: false, open: false}},
             sq: "", sType: "", sRar: "", sOwn: "all", sSort: ["score", -1],
             team: null, teamIdx: 0, hq: ""};
 
@@ -269,7 +284,8 @@ function ownedUmas() {
 const gr = g => `<span class="g g${g}">${g}</span>`;
 const aptTd = (u, a, b) => `<td class="apt">${[...u.a.slice(a, b)].map(gr).join("")}</td>`;
 const APT_TH = `<th class="apt"><span>Tf</span><span>Dt</span></th><th class="apt"><span>Sp</span><span>Mi</span><span>Md</span><span>Lg</span></th><th class="apt"><span>Fr</span><span>Pc</span><span>Lt</span><span>En</span></th>`;
-const growth = u => u.g.map((v, i) => v ? `${STAT[i]} <span class="gold">${v}</span>` : "").filter(Boolean).join(" ");
+const GROW = ["Sp", "St", "Po", "Gu", "Wi"];
+const growth = u => `<span class="grow">${u.g.map((v, i) => `<span><span class="gl">${GROW[i]}</span>${v ? `<span class="gold">${v}</span>` : `<span class="gz">–</span>`}</span>`).join("")}</span>`;
 const uName = u => `<a class="nm" data-act="uinfo" data-id="${u.id}">${esc(u.n)}</a><div class="ttl">${esc(u.t)}</div>`;
 
 /* ---------------- support helpers ---------------- */
@@ -322,7 +338,7 @@ let tab = "trainees";
 function go() {
   const h = location.hash.slice(1);
   tab = TABS.some(t => t[0] === h) ? h : "trainees";
-  $("nav").innerHTML = TABS.map(([k, n]) => `<a href="#${k}" class="${k === tab ? "on" : ""}">${n}</a>`).join("");
+  $("nav").innerHTML = TABS.map(([k, n]) => `<a href="#${k}" class="${k === tab ? "on" : ""}${k === "data" ? " end" : ""}">${n}</a>`).join("");
   VIEWS[tab]();
 }
 function drawBanner() {
@@ -332,26 +348,46 @@ function drawBanner() {
 const view = $("view");
 
 /* ---------------- Trainees ---------------- */
+// Aptitude filter groups: indices into the aptitude string.
+const TF = [
+  {k: "surf", n: "Surface",  items: [["Turf", 0], ["Dirt", 1]]},
+  {k: "dist", n: "Distance", items: [["Sprint", 2], ["Mile", 3], ["Medium", 4], ["Long", 5]]},
+  {k: "sty",  n: "Style",    items: [["Front", 6], ["Pace", 7], ["Late", 8], ["End", 9]]},
+];
+const tfSum = g => {
+  const f = UI.tf[g.k];
+  if (!f.on.length) return "";
+  return g.items.filter(([, i]) => f.on.includes(i)).map(([n]) => n).join(f.any ? " / " : " + ") + " " + f.g + (f.g === "S" ? "" : "+");
+};
 VIEWS.trainees = () => {
-  const dOpts = [["", "Any"], ...DISTS.map((d, i) => [i, d.n])];
-  const sOpts = [["", "Any"], ...STYLES.map((s, i) => [i, s.n])];
-  view.innerHTML = `<div class="card"><div class="fields">
-    <div><label>Search</label><input id="tq" value="${esc(UI.tq)}" placeholder="Name or title"></div>
-    <div><label>Show</label><select id="tOwn">${opts([["all","All"],["own","Owned"],["not","Not owned"]], UI.tOwn)}</select></div>
-    <div><label>Distance A+</label><select id="tDist">${opts(dOpts, UI.tDist)}</select></div>
-    <div><label>Style A+</label><select id="tSty">${opts(sOpts, UI.tSty)}</select></div>
+  const grp = g => {
+    const f = UI.tf[g.k];
+    return `<details class="fgrp" data-k="${g.k}"${f.open ? " open" : ""}><summary>${g.n} <span class="gold" id="tfs-${g.k}">${esc(tfSum(g))}</span></summary>
+      <div class="fbody">${g.items.map(([n, i]) => `<label class="ck"><input type="checkbox" data-tf="${g.k}" data-i="${i}"${f.on.includes(i) ? " checked" : ""}>${n}</label>`).join("")}</div>
+      <div class="fbody"><select class="mini" data-tfg="${g.k}">${opts([...GRADES].map(x => [x, x === "S" ? "S" : x + "+"]), f.g)}</select>
+        ${g.items.length > 1 ? `<select class="mini" data-tfa="${g.k}">${opts([["0", "All"], ["1", "Any"]], f.any ? 1 : 0)}</select>` : ""}</div>
+    </details>`;
+  };
+  view.innerHTML = `<div class="card"><div class="tfrow">
+    <div style="width:220px"><label>Search</label><input id="tq" value="${esc(UI.tq)}" placeholder="Name or title"></div>
+    <div style="width:130px"><label>Show</label><select id="tOwn">${opts([["all","All"],["own","Owned"],["not","Not owned"]], UI.tOwn)}</select></div>
+    ${TF.map(grp).join("")}
   </div><div class="hint" id="tCount"></div></div>
   <div class="card scroll" id="tTable"></div>`;
   drawTrainees();
 };
 function drawTrainees() {
   const q = UI.tq.trim().toLowerCase();
-  const isA = g => g === "S" || g === "A";
+  const passes = u => TF.every(g => {
+    const f = UI.tf[g.k];
+    if (!f.on.length) return true;
+    const ok = f.on.map(i => GRADES.indexOf(u.a[i]) <= GRADES.indexOf(f.g));
+    return f.any ? ok.some(Boolean) : ok.every(Boolean);
+  });
   let list = UMAS.filter(u => avail(u)
     && (!q || (u.n + " " + u.t).toLowerCase().includes(q))
     && (UI.tOwn === "all" || (UI.tOwn === "own") === !!root.umas[u.id])
-    && (UI.tDist === "" || (isA(u.a[DISTS[UI.tDist].dist]) && isA(u.a[DISTS[UI.tDist].surf])))
-    && (UI.tSty === "" || isA(u.a[STYLES[UI.tSty].i])));
+    && passes(u));
   const [key, dir] = UI.tSort;
   const kv = u => {
     const st = uStats(u, uStar(u) || u.r);
@@ -372,9 +408,9 @@ function drawTrainees() {
       <td><select class="mini" data-act="ustar" data-id="${u.id}">${opts(starOpts, star)}</select></td>
       <td><select class="mini" data-act="upot" data-id="${u.id}"${o ? "" : " disabled"}>${opts([1,2,3,4,5].map(i => [i, "P" + i]), o ? o.p : 1)}</select></td>
       ${st.map(v => `<td class="num">${v}</td>`).join("")}<td class="num">${st.reduce((a, b) => a + b, 0)}</td>
-      <td class="muted mono">${growth(u)}</td>${aptTd(u, 0, 2)}${aptTd(u, 2, 6)}${aptTd(u, 6, 10)}</tr>`;
+      <td class="mono">${growth(u)}</td>${aptTd(u, 0, 2)}${aptTd(u, 2, 6)}${aptTd(u, 6, 10)}</tr>`;
   }).join("");
-  $("tTable").innerHTML = `<table><thead><tr>${th("name", "Trainee")}${th("star", "Stars")}<th>Pot</th>
+  $("tTable").innerHTML = `<table class="tt"><thead><tr>${th("name", "Trainee")}${th("star", "Stars")}<th>Potential</th>
     ${STAT.map((s, i) => th(String(i), s, "num")).join("")}${th("tot", "Total", "num")}<th>Growth</th>${APT_TH}</tr></thead>
     <tbody>${rows}</tbody></table>`;
 }
@@ -386,7 +422,7 @@ function uInfo(u) {
   const pot = tg.map((c, i) => `<tr><td>P${i + 2}</td><td class="muted">${c.map(([id, n]) => `${esc(D.items[id] || id)} <span class="gold mono">${n}</span>`).join(" · ")}</td></tr>`).join("");
   modal(`<div class="head">${esc(u.n)} · ${esc(u.t)}</div>
     <div class="scroll"><table><thead><tr><th>Stars</th>${STAT.map(s => `<th class="num">${s}</th>`).join("")}<th class="num">Total</th></tr></thead><tbody>${rows}</tbody></table></div>
-    <div class="scroll" style="margin-top:12px"><table><thead><tr>${APT_TH}<th>Growth</th></tr></thead><tbody><tr>${aptTd(u, 0, 2)}${aptTd(u, 2, 6)}${aptTd(u, 6, 10)}<td class="mono muted">${growth(u)}</td></tr></tbody></table></div>
+    <div class="scroll" style="margin-top:12px"><table><thead><tr>${APT_TH}<th>Growth</th></tr></thead><tbody><tr>${aptTd(u, 0, 2)}${aptTd(u, 2, 6)}${aptTd(u, 6, 10)}<td class="mono">${growth(u)}</td></tr></tbody></table></div>
     <div class="hint">Unique: ${esc(u.u ? skName(u.u) : "—")}${u.en ? " · Global " + u.en : " · JP only"}</div>
     ${bn ? `<div class="hint">Banners: ${bn}</div>` : ""}
     ${pot ? `<details open><summary>Potential costs</summary><table><tbody>${pot}</tbody></table></details>` : ""}`);
@@ -867,7 +903,19 @@ function onChange(e) {
     });
     return;
   }
-  if (["tOwn", "tDist", "tSty"].includes(el.id)) { UI[el.id] = v; drawTrainees(); return; }
+  if (el.id === "tOwn") { UI.tOwn = v; drawTrainees(); return; }
+  const tk = el.dataset.tf || el.dataset.tfg || el.dataset.tfa;
+  if (tk) {
+    const f = UI.tf[tk];
+    if (el.dataset.tf) {
+      const i = +el.dataset.i;
+      f.on = el.checked ? f.on.concat(i) : f.on.filter(x => x !== i);
+    } else if (el.dataset.tfg) f.g = v;
+    else f.any = v === "1";
+    $("tfs-" + tk).textContent = tfSum(TF.find(g => g.k === tk));
+    drawTrainees();
+    return;
+  }
   if (["sType", "sRar", "sOwn"].includes(el.id)) { UI[el.id] = v; drawSupports(); return; }
   const deck = root.decks[i];
   switch (a) {
@@ -912,6 +960,8 @@ function onInput(e) {
 view.addEventListener("click", onClick);
 view.addEventListener("change", onChange);
 view.addEventListener("input", onInput);
+// <details> toggle doesn't bubble; catch it on the way down to remember which filter groups are open.
+view.addEventListener("toggle", e => { const k = e.target.dataset && e.target.dataset.k; if (k && UI.tf[k]) UI.tf[k].open = e.target.open; }, true);
 $("modalcard").addEventListener("click", onClick);
 window.addEventListener("hashchange", go);
 

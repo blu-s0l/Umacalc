@@ -173,11 +173,21 @@ td.apt,th.apt{padding-left:4px;padding-right:4px;white-space:nowrap}
 /* planner trainee rows: targets on line 1, hint targets on line 2, items spanning both */
 table.ptab tr.pu1 td{border-bottom:0;padding-bottom:2px}
 table.ptab tr.pu2 td{padding-top:2px;padding-bottom:10px}
-table.ptab td.pitems{vertical-align:top;font-size:12px;line-height:1.55;min-width:220px}
-.hrow{display:flex;flex-wrap:wrap;gap:6px 14px}
-.hcell{display:flex;flex-direction:column;gap:2px;min-width:110px}
+table.ptab .pitems{vertical-align:top;min-width:340px;padding-top:4px}
+table.ptab th.pitems{vertical-align:bottom;padding-bottom:0}
+table.ptab th.grp{text-align:center;border-bottom:1px solid var(--line)}
+table.sub{width:100%;table-layout:fixed;font-size:12px}
+table.sub td,table.sub th{border:0;padding:1px 0 1px 8px;line-height:1.5}
+table.sub td:first-child,table.sub th:first-child{padding-left:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+table.sub th{padding-bottom:6px}
+/* the hint cells are fixed width so the trainee column can end exactly where the third begins */
+.hrow{display:flex;flex-wrap:wrap;gap:6px 12px}
+.hcell{display:flex;flex-direction:column;gap:2px;width:136px}
 .hcell.off{opacity:.45}
-.hcell .ttl{white-space:nowrap}
+.hcell .ttl{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.hcell select{align-self:flex-start}
+/* 2 × (136 + 12) = 296: the Stars column starts where the third hint cell does (border-box width) */
+table.ptab td.pname{width:296px;min-width:296px;max-width:296px}
 /* collapsible planner sections: the card header is the toggle; collapsed drops only its trailing margin */
 details.sect{border-top:0;padding:0;margin:0}
 details.sect>summary.head{font-size:10.5px;color:var(--sub);font-weight:700;margin-bottom:10px}
@@ -1009,6 +1019,8 @@ function potCost(u, from, to) {
   for (let lv = from + 1; lv <= to; lv++) for (const [id, n] of (tg[lv - 2] || [])) need[id] = (need[id] || 0) + n;
   return need;
 }
+// The per-trainee items table and its header are separate tables; fixed number columns keep them aligned.
+const PSUB_COLS = `<colgroup><col><col style="width:58px"><col style="width:58px"><col style="width:58px"></colgroup>`;
 function drawPlanner() {
   const only = root.plan.only;
   // Trainees: stars and potential on the first line, hint-level targets on the second,
@@ -1025,21 +1037,32 @@ function drawPlanner() {
       const c = hLv(o.h, sk), open = tp >= unlock, t = open ? Math.max(c, hLv(p.h, sk)) : c;
       if (t > c) { hinted = true; hintCost(sk, c, t, need); }
       const lo = []; for (let i = c; i <= HINT_MAX; i++) lo.push([i, "Lv" + i]);
-      return `<div class="hcell${open ? "" : " off"}"><div class="ttl ${skGold(sk) ? "gold" : ""}">${unlock > 1 ? `<span class="mono">P${unlock}</span> ` : ""}${esc(skName(sk))}</div>
+      return `<div class="hcell${open ? "" : " off"}"><div class="ttl ${skGold(sk) ? "gold" : ""}" title="${esc(skName(sk))}">${unlock > 1 ? `<span class="mono">P${unlock}</span> ` : ""}${esc(skName(sk))}</div>
         <select class="mini" data-act="puh" data-id="${u.id}" data-sk="${sk}"${open ? "" : " disabled"}>${opts(lo, t)}</select></div>`;
     }).join("");
     for (const id in need) items[id] = (items[id] || 0) + need[id];
     if (only && ts === o.s && tp === o.p && !hinted) return "";
     const so = []; for (let i = o.s; i <= 5; i++) so.push([i, i + "★"]);
     const po = []; for (let i = o.p; i <= 5; i++) po.push([i, "P" + i]);
-    const il = Object.keys(need).sort((a, b) => itemOrder(a) - itemOrder(b))
-      .map(id => `<div>${esc(D.items[id] || id)} <span class="gold mono">${need[id]}</span></div>`).join("");
-    return `<tr class="pu1"><td>${uName(u)}</td><td class="num">${o.s}★</td><td><select class="mini" data-act="pus" data-id="${u.id}">${opts(so, ts)}</select></td>
-      <td class="num">${shards || ""}</td><td class="num">P${o.p}</td><td><select class="mini" data-act="pup" data-id="${u.id}">${opts(po, tp)}</select></td>
-      <td class="muted pitems" rowspan="2">${il}</td></tr>
-      <tr class="pu2"><td colspan="6"><div class="hrow">${hcells}</div></td></tr>`;
+    // Owned counts come from Inventory: items are shared, shards belong to this trainee.
+    const n = v => v ? fN(v) : "";
+    const il = Object.keys(need).sort((a, b) => itemOrder(a) - itemOrder(b)).map(id => {
+      const have = invHave(id);
+      return `<tr><td>${esc(D.items[id] || id)}</td><td class="num">${n(need[id])}</td><td class="num">${n(have)}</td><td class="num gold">${n(Math.max(0, need[id] - have))}</td></tr>`;
+    }).join("");
+    const sHave = root.inv.shards[u.id] || 0;
+    return `<tr class="pu1"><td class="pname">${uName(u)}</td><td>${o.s}★</td><td><select class="mini" data-act="pus" data-id="${u.id}">${opts(so, ts)}</select></td>
+      <td class="num">${n(shards)}</td><td class="num">${shards ? n(sHave) : ""}</td><td class="num gold">${n(Math.max(0, shards - sHave))}</td>
+      <td class="num">P${o.p}</td><td><select class="mini" data-act="pup" data-id="${u.id}">${opts(po, tp)}</select></td>
+      <td class="pitems" rowspan="2">${il ? `<table class="sub">${PSUB_COLS}<tbody>${il}</tbody></table>` : ""}</td></tr>
+      <tr class="pu2"><td colspan="8"><div class="hrow">${hcells}</div></td></tr>`;
   }).join("");
-  $("pU").innerHTML = sect("pU", "Trainees", `<table class="ptab"><thead><tr><th>Trainee</th><th class="num">Stars</th><th>Target</th><th class="num">Shards</th><th class="num">Pot</th><th>Target</th><th>Items</th></tr></thead><tbody>${urows || `<tr><td colspan="7" class="muted">—</td></tr>`}</tbody></table>`);
+  $("pU").innerHTML = sect("pU", "Trainees", `<table class="ptab"><thead>
+    <tr><th rowspan="2">Trainee</th><th rowspan="2">Stars</th><th rowspan="2">Target</th><th colspan="3" class="grp">Shards</th>
+      <th rowspan="2" class="num">Pot</th><th rowspan="2">Target</th>
+      <th rowspan="2" class="pitems"><table class="sub">${PSUB_COLS}<thead><tr><th>Item</th><th class="num">Need</th><th class="num">Owned</th><th class="num">Left</th></tr></thead></table></th></tr>
+    <tr><th class="num">Need</th><th class="num">Owned</th><th class="num">Left</th></tr></thead>
+    <tbody>${urows || `<tr><td colspan="9" class="muted">—</td></tr>`}</tbody></table>`);
   // Items: shoes first, then sashes, then the rest.
   const ik = Object.keys(items).sort((a, b) => itemOrder(a) - itemOrder(b));
   $("pI").innerHTML = sect("pI", "Items", `<table><thead><tr><th>Item</th><th class="num">Need</th><th class="num">Have</th><th class="num">Short</th></tr></thead><tbody>

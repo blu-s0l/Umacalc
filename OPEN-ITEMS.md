@@ -10,14 +10,27 @@ Umamusume: Pretty Derby (Global). One `index.html` in the house style from
   trainees, so a pin locks the race only, and right-align the race dropdown in each pin row.
   Saved pins that already have a style (`root.team.pins[].s`) should be cleared in `normalize()`
   so they stop constraining the solver.
-- **Aces in team building (requested 2026-10-17, for later).** Aces earn bonus points in Team
-  Trials. Any ace in Must include should be treated as that race's Ace and listed in the race's
-  first slot. Open questions:
-  - Where "ace" comes from: a flag on the pin, or the Aces tab, which is still a placeholder.
-  - One ace per race, or one for the whole team? Confirm the Global rule.
-  - How the bonus enters scoring. Probably weight the ace's slot score up, so the solver puts its
-    strongest fit in the ace slot and picks the ace's race and style with that in mind.
-  Get the actual bonus rule before choosing a weight.
+- **Aces in team building (requested 2026-10-17, for later; rules settled with Steve).**
+  - **Rules.** Aces earn bonus points in Team Trials. Each race (Sprint, Mile, Medium, Long,
+    Dirt) has exactly one ace, listed in that race's first slot.
+  - **Who becomes ace.** The builder decides; nothing is flagged. Make as many Must include
+    trainees aces as possible. Not every pin can be one: seven pins means at least two are not,
+    and if none of five pins can run Dirt, only four can be aces.
+  - **No point value needed.** The goal is to maximise the number of pinned aces, then build the
+    best team around that.
+  - **Not the Aces tab.** That tab is for user-entered aces in a different game mode and has
+    nothing to do with this.
+  - **Planned approach, in two stages:**
+    1. Max-cardinality matching of pins to races. A pin can match a race if it has an eligible
+       slot there and its own race lock allows it. Ties go to the higher slot score. Each matched
+       pin is that race's ace, so fix its race.
+    2. Run the usual team solve with those races fixed; unmatched pins stay free.
+  - **Ace for races without a pin:** the highest-scoring member, shown as ace too. Mark aces in
+    the team table (first in their race block, with a marker) and keep them first in
+    alternatives.
+  - **Why not one flow model:** pinned and unpinned runners merge at the shared style-slot
+    bottleneck, so a single min-cost flow can't count pinned aces per race. That is why the
+    matching runs as its own stage.
 - **Teams legend (requested 2026-10-17, for later).** Put the ⚑ and ♡ markers used in the team
   table next to the "Must include" and "Prefer" headings, so new users can tell what they mean.
 

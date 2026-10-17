@@ -91,7 +91,7 @@ tr.sorted td{background:var(--bluebg)}
        align-items:center;justify-content:center;padding:20px}
 .modal.open{display:flex}
 .modalcard{background:var(--panel);border:1px solid var(--line2);border-radius:14px;
-           padding:18px 22px;max-width:760px;width:100%;max-height:86vh;overflow:auto}
+           padding:18px 22px;max-width:880px;width:100%;max-height:86vh;overflow:auto}
 
 .vbar{color:var(--gold);font-weight:700;padding:0 6px}
 
@@ -122,6 +122,12 @@ select:disabled:hover{border-color:var(--line2)}
 .ctr{text-align:center}
 .mtitle{font-size:21px;font-weight:700;letter-spacing:-.01em;line-height:1.2}
 .msub{font-size:14px;color:var(--sub);margin-bottom:12px}
+.kv{font-size:13px;color:var(--tx);margin-top:4px}
+table.cmp th,table.cmp td{padding-left:6px;padding-right:6px}
+table.cmp .gs{padding-left:16px}
+.tgl{padding:3px 10px;font-size:12px;color:var(--mut);border-color:var(--line2);border-radius:8px}
+.tgl.on{color:var(--blue);background:var(--bluebg);border-color:rgba(77,159,255,.3);font-weight:600}
+.tgl.on:hover{color:var(--blue);border-color:var(--blue)}
 table.pot th.pl{text-align:center;border-bottom:1px solid var(--line)}
 table.pot td:nth-child(even),table.pot th.pl,table.pot tr:last-child th:nth-child(odd){padding-left:16px}
 label.ck{display:inline-flex;align-items:center;text-transform:none;letter-spacing:0;font-size:12.5px;font-weight:500;color:var(--tx);margin:0;cursor:pointer}
@@ -254,6 +260,7 @@ function normalize(r) {
   }
   for (const k of ["team", "plan", "set"]) for (const kk in b[k]) if (r[k][kk] == null) r[k][kk] = b[k][kk];
   r.decks.forEach(normDeck);
+  for (const id in r.tgt) if (r.umas[id]) delete r.tgt[id];
   r.schema = SCHEMA;
   return r;
 }
@@ -426,7 +433,7 @@ function drawTrainees() {
     return `<tr class="${o ? "" : "off"}"><td>${uName(u)}</td>
       <td><select class="mini" data-act="ustar" data-id="${u.id}">${opts(starOpts, star)}</select></td>
       <td><select class="mini" data-act="upot" data-id="${u.id}"${o ? "" : " disabled"}>${opts([1,2,3,4,5].map(i => [i, "P" + i]), o ? o.p : 1)}</select></td>
-      <td class="ctr"><input type="checkbox" data-act="utgt" data-id="${u.id}"${root.tgt[u.id] ? " checked" : ""}></td>
+      <td class="ctr">${o ? "" : `<button class="tgl${root.tgt[u.id] ? " on" : ""}" data-act="utgt" data-id="${u.id}">Target</button>`}</td>
       ${st.map(v => `<td class="num">${v}</td>`).join("")}<td class="num">${st.reduce((a, b) => a + b, 0)}</td>
       <td class="mono">${growth(u)}</td>${aptTd(u, 0, 2)}${aptTd(u, 2, 6)}${aptTd(u, 6, 10)}</tr>`;
   }).join("");
@@ -437,7 +444,6 @@ function drawTrainees() {
 function uInfo(u) {
   const o = root.umas[u.id];
   const rows = [1,2,3,4,5].filter(i => u.s[i]).map(i => `<tr${o && o.s === i ? ' class="sel"' : ""}><td>${i}★</td>${u.s[i].map(v => `<td class="num">${v}</td>`).join("")}<td class="num">${u.s[i].reduce((a, b) => a + b, 0)}</td></tr>`).join("");
-  const bn = u.b.map(([t, e]) => day(t) + (e ? " est" : "")).join(" · ");
   // Potential: one row per item, and for each level both that level's cost and the
   // running total from the current potential up to it.
   const tg = D.talent[u.tg] || [], cur = o ? o.p : 1;
@@ -454,16 +460,21 @@ function uInfo(u) {
   const potHead = `<tr><th rowspan="2">Item</th>${tg.map((c, i) => `<th class="num pl" colspan="2">P${i + 2}</th>`).join("")}</tr>
     <tr>${tg.map(() => `<th class="num">Lvl</th><th class="num">Total</th>`).join("")}</tr>`;
   const GROW_FULL = ["Speed", "Stamina", "Power", "Guts", "Wit"];
+  const APT_FULL = ["Turf", "Dirt", "Sprint", "Mile", "Medium", "Long", "Front", "Pace", "Late", "End"];
+  const grpStart = i => i === 2 || i === 6 ? " gs" : "";      // first column of distance / style
+  const bnDates = u.b.map(([t, e]) => `<span class="gold">${day(t)}</span>${e ? " est" : ""}`).join(" · ");
   modal(`<div class="mtitle">${esc(u.n)}</div><div class="msub">${esc(u.t)}</div>
+    <div class="kv" style="margin:-6px 0 12px">Unique <span class="gold">${esc(u.u ? skName(u.u) : "—")}</span></div>
     <div class="scroll"><table><thead><tr><th>Stars</th>${STAT.map(s => `<th class="num">${s}</th>`).join("")}<th class="num">Total</th></tr></thead><tbody>${rows}</tbody></table></div>
-    <div class="row" style="gap:24px;margin-top:12px;align-items:flex-start">
-      <div class="scroll"><table style="width:auto"><thead><tr>${APT_TH}</tr></thead><tbody><tr>${aptTd(u, 0, 2)}${aptTd(u, 2, 6)}${aptTd(u, 6, 10)}</tr></tbody></table></div>
-      <div class="scroll"><table style="width:auto"><thead><tr>${GROW_FULL.map(s => `<th class="num">${s}</th>`).join("")}</tr></thead>
+    <div class="row" style="gap:20px;margin-top:12px;align-items:flex-start;flex-wrap:nowrap">
+      <div class="scroll"><table class="cmp" style="width:auto"><thead><tr>${APT_FULL.map((n, i) => `<th class="ctr${grpStart(i)}">${n}</th>`).join("")}</tr></thead>
+        <tbody><tr>${[...u.a].map((g, i) => `<td class="ctr${grpStart(i)}">${gr(g)}</td>`).join("")}</tr></tbody></table></div>
+      <div class="scroll"><table class="cmp" style="width:auto"><thead><tr>${GROW_FULL.map(s => `<th class="num">${s}</th>`).join("")}</tr></thead>
         <tbody><tr>${u.g.map(v => `<td class="num">${v ? `<span class="gold">${v}%</span>` : `<span class="gz">–</span>`}</td>`).join("")}</tr></tbody></table></div></div>
-    <div class="hint">Unique: ${esc(u.u ? skName(u.u) : "—")}${u.en ? " · Global " + u.en : " · JP only"}</div>
-    ${bn ? `<div class="hint">Banners: ${bn}</div>` : ""}
     ${pot ? `<div class="head" style="margin-top:16px">Potential<span class="vbar">|</span>Now P${cur}</div>
-      <div class="scroll"><table class="pot"><thead>${potHead}</thead><tbody>${pot}</tbody></table></div>` : ""}`);
+      <div class="scroll"><table class="pot"><thead>${potHead}</thead><tbody>${pot}</tbody></table></div>` : ""}
+    <div class="kv" style="margin-top:14px">${u.en ? `Global release <span class="gold">${u.en}</span>` : "JP only"}</div>
+    ${bnDates ? `<div class="kv">Banners ${bnDates}</div>` : ""}`);
 }
 
 /* ---------------- Supports ---------------- */
@@ -900,6 +911,7 @@ function onClick(e) {
   const deck = root.decks[i];
   switch (a) {
     case "uinfo": uInfo(UBY[id]); break;
+    case "utgt": if (root.tgt[id]) delete root.tgt[id]; else root.tgt[id] = 1; save(); drawTrainees(); break;
     case "sinfo": sInfo(SBY[id]); break;
     case "dnew": root.decks.push(normDeck({name: "Deck " + (root.decks.length + 1)})); save(); drawDecks(); break;
     case "dauto": autoDeck(deck); save(); drawDecks(); break;
@@ -961,10 +973,10 @@ function onChange(e) {
   const deck = root.decks[i];
   switch (a) {
     case "ustar":
-      if (+v) root.umas[id] = {s: +v, p: (root.umas[id] || {}).p || 1}; else delete root.umas[id];
+      // Owning a trainee retires its target.
+      if (+v) { root.umas[id] = {s: +v, p: (root.umas[id] || {}).p || 1}; delete root.tgt[id]; } else delete root.umas[id];
       save(); drawTrainees(); break;
     case "upot": if (root.umas[id]) root.umas[id].p = +v; save(); break;
-    case "utgt": if (el.checked) root.tgt[id] = 1; else delete root.tgt[id]; save(); drawTrainees(); break;
     case "slb":
       if (v === "") delete root.sups[id]; else root.sups[id] = {lb: +v};
       save(); drawSupports(); break;

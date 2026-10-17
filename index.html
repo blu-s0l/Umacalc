@@ -294,12 +294,14 @@ const LV_PTS = [1,5,10,15,20,25,30,35,40,45,50];
 
 // Team Trials: five races, three runners each. Aptitude string order is
 // Turf Dirt | Sprint Mile Medium Long | Front Pace Late End.
+// w = stat weights [Spd, Sta, Pow, Gut, Wit] for base stats and growth alike. Wit carries
+// +0.2 everywhere: skills activate on wit, and Team Trials points come largely from skills.
 const DISTS = [
-  {n: "Sprint", surf: 0, dist: 2, w: [1, 0, 1, .5, .5]},
-  {n: "Mile",   surf: 0, dist: 3, w: [1, .2, 1, .3, .6]},
-  {n: "Medium", surf: 0, dist: 4, w: [1, .6, .8, .3, .5]},
-  {n: "Long",   surf: 0, dist: 5, w: [.8, 1.2, .6, .4, .5]},
-  {n: "Dirt",   surf: 1, dist: 3, w: [1, .2, 1.2, .4, .4]},
+  {n: "Sprint", surf: 0, dist: 2, w: [1, 0, 1, .5, .7]},
+  {n: "Mile",   surf: 0, dist: 3, w: [1, .2, 1, .3, .8]},
+  {n: "Medium", surf: 0, dist: 4, w: [1, .6, .8, .3, .7]},
+  {n: "Long",   surf: 0, dist: 5, w: [.8, 1.2, .6, .4, .7]},
+  {n: "Dirt",   surf: 1, dist: 3, w: [1, .2, 1.2, .4, .6]},
 ];
 const STYLES = [{n: "Front", i: 6}, {n: "Pace", i: 7}, {n: "Late", i: 8}, {n: "End", i: 9}];
 

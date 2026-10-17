@@ -131,6 +131,8 @@ select:disabled:hover{border-color:var(--line2)}
 .mtitle{font-size:21px;font-weight:700;letter-spacing:-.01em;line-height:1.2}
 .msub{font-size:14px;color:var(--sub);margin-bottom:12px}
 .kv{font-size:13px;color:var(--tx);margin-top:4px}
+a.ext{font-size:11.5px;font-weight:600;text-transform:none;letter-spacing:0;margin-left:8px;text-decoration:none;white-space:nowrap}
+a.ext:hover{text-decoration:underline}
 .mhead{display:flex;justify-content:space-between;align-items:flex-start;gap:12px}
 .mpic{width:96px;height:96px;flex:none;margin:-6px -4px 0 0;border-radius:10px;background:var(--panel2);border:1px solid var(--line)}
 table.cmp th,table.cmp td{padding-left:6px;padding-right:6px}
@@ -174,7 +176,8 @@ td.apt,th.apt{padding-left:4px;padding-right:4px;white-space:nowrap}
             padding-top:12px;border-bottom:1px solid var(--line2)}
 .bench{font-size:11.5px;color:var(--mut)}
 .pinrow{display:flex;gap:6px;align-items:center;margin-bottom:6px;flex-wrap:wrap}
-.pinrow .nm{min-width:180px}
+.pinrow .nm{flex:1;min-width:0}
+.pinrow select{margin-left:auto}
 .pinrow select{width:auto}
 .split{display:grid;grid-template-columns:1fr 1fr;gap:14px}
 /* planner trainee rows: targets on line 1, hint targets on line 2, items spanning both */
@@ -349,6 +352,8 @@ function normalize(r) {
   for (const k of ["team", "plan", "set", "inv"]) for (const kk in b[k]) if (r[k][kk] == null) r[k][kk] = b[k][kk];
   r.decks.forEach(normDeck);
   for (const id in r.tgt) if (r.umas[id]) delete r.tgt[id];
+  // Pins lock a race only (2026-10-17); clear any style lock saved before that.
+  r.team.pins.forEach(p => { p.s = null; });
   // Hint levels were briefly stored as a 4-slot array of potential skills; now {skillId: lv}.
   for (const src of [r.umas, r.plan.umas]) for (const id in src) {
     const x = src[id], u = UBY[id];
@@ -415,6 +420,10 @@ const aptTd = (u, a, b) => `<td class="apt">${[...u.a.slice(a, b)].map(gr).join(
 const APT_TH = `<th class="apt"><span>Tf</span><span>Dt</span></th><th class="apt"><span>Sp</span><span>Mi</span><span>Md</span><span>Lg</span></th><th class="apt"><span>Fr</span><span>Pc</span><span>Lt</span><span>En</span></th>`;
 const GROW = ["Sp", "St", "Po", "Gu", "Wi"];
 const growth = u => `<span class="grow">${u.g.map((v, i) => `<span><span class="gl">${GROW[i]}</span>${v ? `<span class="gold">${v}</span>` : `<span class="gz">–</span>`}</span>`).join("")}</span>`;
+// A trainee's or card's own GameTora page, opened in a new tab. (GameTora has no per-skill
+// page, so skill names aren't linked; see OPEN-ITEMS.)
+const gtLink = (kind, slug) => slug
+  ? ` <a class="ext" href="https://gametora.com/umamusume/${kind}/${encodeURIComponent(slug)}" target="_blank" rel="noopener">GameTora ↗</a>` : "";
 // Potential items: shoes first, then sashes, then Dream Glimmer.
 const itemOrder = id => (+id <= 13 ? 0 : +id === 44 ? 2 : 1) * 1000 + +id;
 const uName = u => `<a class="nm" data-act="uinfo" data-id="${u.id}">${esc(u.n)}</a><div class="ttl">${esc(u.t)}</div>${jpOnly(u) ? `<div class="jpt">JP · est ${estGlobal(u.jp)}</div>` : ""}`;
@@ -585,7 +594,7 @@ function uInfo(u) {
        ${u.jp ? `<div class="kv">Est. Global release <span class="gold">${estGlobal(u.jp)}</span></div>` : ""}`
     : `<div class="kv" style="margin-top:14px">Global release <span class="gold">${u.en}</span></div>
        ${u.b.some(b => !b[1]) ? `<div class="kv">Banners ${dates(u.b.filter(b => !b[1]).map(b => b[0]))}</div>` : ""}`;
-  modal(`<div class="mhead"><div><div class="mtitle">${esc(u.n)}</div><div class="msub">${esc(u.t)}</div>
+  modal(`<div class="mhead"><div><div class="mtitle">${esc(u.n)}</div><div class="msub">${esc(u.t)}${gtLink("characters", u.url)}</div>
     <div class="kv" style="margin:-6px 0 12px">Unique <span class="gold">${esc(u.u ? skName(u.u) : "—")}</span></div></div>
     <img class="mpic" src="img/umas/${u.id}.png" alt="" width="96" height="96" onerror="this.remove()"></div>
     <div class="scroll"><table><thead><tr><th>Stars</th>${STAT.map(s => `<th class="num">${s}</th>`).join("")}<th class="num">Total</th></tr></thead><tbody>${rows}</tbody></table></div>
@@ -644,7 +653,7 @@ function sInfo(s) {
   const uq = s.u ? s.u.ef.map(([t, v]) => t < 100 ? `${esc(D.effects[t] || "#" + t)} ${v}` : "conditional").join(" · ") : "";
   const sk = ids => ids.map(id => `<span class="${skGold(id) ? "gold" : ""}">${esc(skName(id))}</span>`).join(" · ");
   const bn = s.b.map(([t, e]) => day(t) + (e ? " est" : "")).join(" · ");
-  modal(`<div class="head">${RAR[s.r]} ${TYPE_LBL[s.ty]} · ${esc(s.n)} · ${esc(s.t)}</div>
+  modal(`<div class="head">${RAR[s.r]} ${TYPE_LBL[s.ty]} · ${esc(s.n)} · ${esc(s.t)}${gtLink("supports", s.url)}</div>
     <div class="scroll"><table><thead><tr><th>Effect</th>${[0,1,2,3,4].map(lb => `<th class="num">LB${lb} · ${maxLv(s, lb)}</th>`).join("")}</tr></thead><tbody>${rows}</tbody></table></div>
     ${uq ? `<div class="hint">Unique (Lv${s.u.lv}): ${uq}${s.ud ? " — " + esc(s.ud) : ""}</div>` : ""}
     <div class="hint">Score: ${[0,1,2,3,4].map(lb => `<span class="gold mono">${f1(supScore(s, maxLv(s, lb)))}</span>`).join('<span class="vbar">|</span>')}</div>
@@ -872,13 +881,12 @@ function drawTeamCtl() {
     const u = UBY[p.id]; if (!u) return "";
     return `<div class="pinrow"><span class="nm">${esc(u.n)} <span class="ttl">${esc(u.t)}</span></span>
       <select class="mini" data-act="pind" data-i="${i}">${opts([["", "Any race"], ...DISTS.map((d, k) => [k, d.n])], p.d == null ? "" : p.d)}</select>
-      <select class="mini" data-act="pins" data-i="${i}">${opts([["", "Any style"], ...STYLES.map((s, k) => [k, s.n])], p.s == null ? "" : p.s)}</select>
       <button class="x" data-act="pinx" data-i="${i}">×</button></div>`;
   }).join("");
   const simple = (list, act) => list.map((id, i) => UBY[id] ? `<div class="pinrow"><span class="nm">${esc(UBY[id].n)} <span class="ttl">${esc(UBY[id].t)}</span></span><button class="x" data-act="${act}" data-i="${i}">×</button></div>` : "").join("");
   $("teamCtl").innerHTML = `<div class="split3">
-    <div><div class="head">Must include</div>${pins}<select data-act="pinadd">${opts(uo, "")}</select></div>
-    <div><div class="head">Prefer</div>${simple(root.team.prefs, "prx")}<select data-act="pradd">${opts(uo, "")}</select></div>
+    <div><div class="head">Must include <span class="gold">⚑</span></div>${pins}<select data-act="pinadd">${opts(uo, "")}</select></div>
+    <div><div class="head">Prefer <span class="gold">♡</span></div>${simple(root.team.prefs, "prx")}<select data-act="pradd">${opts(uo, "")}</select></div>
     <div><div class="head">Exclude</div>${simple(root.team.excl, "exx")}<select data-act="exadd">${opts(uo, "")}</select></div></div>
     <div class="row" style="margin-top:14px">
       <div style="width:150px"><label>Lowest aptitude</label><select data-act="ming">${opts([["A","A"],["B","B"],["C","C"]], root.team.minG)}</select></div>
@@ -1312,7 +1320,6 @@ function onChange(e) {
     case "exadd": if (v && !root.team.excl.includes(+v)) root.team.excl.push(+v); save(); drawTeamCtl(); break;
     case "pradd": if (v && !root.team.prefs.includes(+v)) root.team.prefs.push(+v); save(); drawTeamCtl(); break;
     case "pind": root.team.pins[i].d = v === "" ? null : +v; save(); break;
-    case "pins": root.team.pins[i].s = v === "" ? null : +v; save(); break;
     case "ming": root.team.minG = v; save(); break;
     case "alts": root.team.alts = Math.max(0, Math.min(30, +v || 0)); save(); break;
     case "pus": root.plan.umas[id] = {...(root.plan.umas[id] || {}), s: +v}; save(); drawPlanner(); break;

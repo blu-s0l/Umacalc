@@ -47,7 +47,7 @@ def main(dl):
             if c.get(k):
                 st[i] = c[k]
         umas.append({
-            "id": c["card_id"], "c": c["char_id"], "n": c["name_en"],
+            "id": c["card_id"], "c": c["char_id"], "n": c["name_en"], "url": c.get("url_name"),
             "t": (c.get("title_en_gl") or "[" + c.get("title", "") + "]").strip("[]"),
             "r": c["rarity"], "a": "".join(c["aptitude"]), "s": st, "g": c["stat_bonus"],
             "en": c.get("release_en"), "jp": c.get("release"), "tg": c["talent_group"],
@@ -64,7 +64,7 @@ def main(dl):
         u = s.get("unique")
         b = []
         sups.append({
-            "id": s["support_id"], "c": s["char_id"], "n": s["char_name"],
+            "id": s["support_id"], "c": s["char_id"], "n": s["char_name"], "url": s.get("url_name"),
             "t": (s.get("title_en") or s.get("title_ja") or "").strip("[]"),
             "r": s["rarity"], "ty": s["type"], "en": s.get("release_en"), "jp": s.get("release"),
             "ob": s.get("obtained"), "ef": ef,

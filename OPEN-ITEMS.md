@@ -6,10 +6,10 @@ Umamusume: Pretty Derby (Global). One `index.html` in the house style from
 
 ## To do
 
-- **Teams → Must include (requested 2026-10-17, for later).** Remove the style dropdown from pinned
-  trainees, so a pin locks the race only, and right-align the race dropdown in each pin row.
-  Saved pins that already have a style (`root.team.pins[].s`) should be cleared in `normalize()`
-  so they stop constraining the solver.
+- **Skill links.** Trainee and card panels now link to their GameTora pages. Skill names
+  aren't linked: GameTora has no page per skill, and its skills list can't be opened at a given
+  skill by link. Options to put to Steve: an in-app skill pop-up (description from `skills.json`,
+  plus which trainees and cards give it), or another site that has per-skill pages.
 - **Aces in team building (requested 2026-10-17, for later; rules settled with Steve).**
   - **Rules.** Aces earn bonus points in Team Trials. Each race (Sprint, Mile, Medium, Long,
     Dirt) has exactly one ace, listed in that race's first slot.
@@ -25,6 +25,8 @@ Umamusume: Pretty Derby (Global). One `index.html` in the house style from
       without a pinned ace takes its highest-scoring member.
     In both, the ace's small bonus goes to whoever is ace, so the ace is always the race's best
     runner unless the priority rule says otherwise.
+  - **Reference:** GameTora has a Team Trials scoring page (`gametora.com/umamusume/team-trials-pvp-scoring`).
+    Read it before building this, to see how the ace bonus is actually scored.
   - **Not the Aces tab.** That tab is for user-entered aces in a different game mode and has
     nothing to do with this.
   - **Priority-ace build, in two stages:**
@@ -37,43 +39,36 @@ Umamusume: Pretty Derby (Global). One `index.html` in the house style from
   - **Why not one flow model:** pinned and unpinned runners merge at the shared style-slot
     bottleneck, so a single min-cost flow can't count pinned aces per race. That is why the
     matching runs as its own stage.
-- **Teams legend (requested 2026-10-17, for later).** Put the ⚑ and ♡ markers used in the team
-  table next to the "Must include" and "Prefer" headings, so new users can tell what they mean.
 
-- **Links (requested 2026-10-17, for later).** Make every skill name a link, everywhere skill
-  names appear: trainee panel, Planner hint cells, deck hints, support card panel, Hint Sources.
-  Link the trainee panel (and support card panel) to that trainee's or card's own page.
-  Presumably GameTora (`gametora.com/umamusume/skills/<id>`, `/characters/<url_name>`,
-  `/supports/<url_name>`). Confirm the target site with Steve first. `data.js` doesn't carry
-  `url_name` yet; add it in `build_data.py`. Open in a new tab.
 
 - **Check the effect interpolation against the game.** `effAt()` interpolates linearly
   between GameTora's breakpoints (Lv 1, 5, 10 … 50) and floors. Effects with no value before
   their first breakpoint count as 0. One in-game check per rarity at LB1 or LB2 would settle it.
-- **Check the star-up shard costs in the Global client.** `STAR_SHARDS` is 50 / 100 / 200 / 300
-  per step (650 from 1★ to 5★), taken from JP guides.
 - Conditional unique effects (types 101–122, e.g. "bonus while friendship ≥ X") are not modelled.
   They get a flat `COND_UNIQUE` score credit and an asterisk.
-- Coin costs for potential levels aren't in the data, so the planner shows items only.
-- **Check the hint-level costs in the Global client.** `HINT_COST` comes from JP guides, not
-  game data, because GameTora doesn't publish it. Normal skills: Book ×4 / ×8, then Textbook ×6;
-  Glimmer 5 / 10 / 15. Applies to innate skills (3, always open) and potential skills (4, unlocked P2–P5). Rare skills: Rare Book ×8 / ×16, then Rare Textbook ×12; Glimmer
-  20 / 40 / 60. Max Lv3. Monies are left out, since only the Lv0→1 cost (10,000) is documented.
 - Planner's Items table and the Inventory tab share `root.plan.inv`. Planner is target-based and
   Inventory is max-everything. If Planner ends up redundant, fold it into Inventory.
-- Team builder ideas: an ace pick per race; weighting a race by your own priorities;
+- Team builder ideas: weighting a race by your own priorities;
   "has this trainee's unique skill reached Lv X" (star level).
 - Deck scoring ignores the deck's trainee: growth bonuses, distance and the scenario. A per-trainee
   weighting (e.g. Long trainee → stamina cards worth more) would be the next step.
 
 ## Decided
 
+- **Star-up shard costs** are 50 / 100 / 200 / 300 per step (650 from 1★ to 5★). These came
+  from JP guides, and Steve confirmed them for Global on 2026-10-17.
+- **Hint-level costs** (`HINT_COST`, confirmed by Steve 2026-10-17). They apply to the 3 innate
+  and 4 potential skills, max Lv3. Normal skills: Book ×4, then Book ×8, then Textbook ×6;
+  Glimmer 5 / 10 / 15. Rare skills: Rare Book ×8, then ×16, then Rare Textbook ×12; Glimmer
+  20 / 40 / 60.
+- **Pins lock a race only** (2026-10-17). The style dropdown was removed, and older saved style
+  locks are cleared on load. The ⚑ and ♡ markers sit beside the Must include and Prefer headings.
 - **Data comes from GameTora's public JSON** (`tools/build_data.py`). The app filters on
   `release_en <= today` at runtime, so new Global releases show up without editing code. Rebuild
   `data.js` only when GameTora adds new trainees or cards.
   `py -I tools/build_data.py <some-empty-download-dir>`
 - **Inventory = what it takes to max every switched-on trainee:** 5★, P5, and Lv3 hints on
-  all four potential skills. Owned trainees are on by default and unowned ones off
+  all seven hint-able skills (3 innate, 4 potential). Owned trainees are on by default and unowned ones off
   (`root.inv.on`). Shards are per trainee, so the still-needed count sums each trainee's own
   shortfall; one trainee's surplus never covers another. Hint levels are stored on the owned
   trainee as `root.umas[id].h = {skillId: level}`, covering the 3 innate and 4 potential skills.
@@ -120,4 +115,5 @@ Umamusume: Pretty Derby (Global). One `index.html` in the house style from
 
 ## Ruled out
 
+- Monies (coin) costs for potential and hint levels: Steve chose to leave them out (2026-10-17).
 - Hotlinking images from GameTora: it uses their bandwidth and makes the app depend on their paths.

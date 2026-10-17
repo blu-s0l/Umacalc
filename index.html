@@ -173,7 +173,7 @@ td.apt,th.apt{padding-left:4px;padding-right:4px;white-space:nowrap}
 /* planner trainee rows: targets on line 1, hint targets on line 2, items spanning both */
 table.ptab tr.pu1 td{border-bottom:0;padding-bottom:2px}
 table.ptab tr.pu2 td{padding-top:2px;padding-bottom:10px}
-table.ptab .pitems{vertical-align:top;width:290px;min-width:290px;max-width:290px;padding-top:4px}
+table.ptab .pitems{vertical-align:top;width:260px;min-width:260px;max-width:260px;padding-top:4px}
 table.ptab th.pitems{vertical-align:bottom;padding-bottom:0}
 table.ptab th.grp{text-align:center;border-bottom:1px solid var(--line)}
 table.sub{width:100%;table-layout:fixed;font-size:12px}
@@ -183,12 +183,13 @@ table.sub td:first-child,table.sub th:first-child{padding-left:0;white-space:now
 table.sub th{padding-bottom:6px}
 /* the hint cells are fixed width so the trainee column can end exactly where the third begins */
 .hrow{display:flex;flex-wrap:wrap;gap:6px 10px}
-.hcell{display:flex;flex-direction:column;gap:2px;width:112px}
+.hcell{display:flex;flex-direction:column;gap:2px;min-width:110px}
 .hcell.off{opacity:.45}
-.hcell .ttl{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.hcell select{align-self:flex-start}
-/* 2 × (112 + 10) = 244: the Stars column starts where the third hint cell does (border-box width) */
+.hcell .ttl{white-space:nowrap}
+/* the trainee column ends about where the third skill starts; the target columns shrink to fit and the filler column takes the slack */
 table.ptab td.pname{width:244px;min-width:244px;max-width:244px}
+table.ptab .fit{width:1%;white-space:nowrap}
+table.ptab .fill{padding:0}
 /* collapsible planner sections: the card header is the toggle; collapsed drops only its trailing margin */
 details.sect{border-top:0;padding:0;margin:0}
 details.sect>summary.head{font-size:10.5px;color:var(--sub);font-weight:700;margin-bottom:10px}
@@ -1023,7 +1024,7 @@ function potCost(u, from, to) {
 // The per-trainee items table and its header are separate tables; fixed number columns keep them aligned.
 // Short item names for the narrow per-trainee items table; the full name is the tooltip.
 const itemShort = id => (D.items[id] || String(id)).replace(/ Racing Shoes$/, " Shoes").replace(/ Winner's Sash$/, " Sash");
-const PSUB_COLS =`<colgroup><col><col style="width:44px"><col style="width:44px"><col style="width:44px"></colgroup>`;
+const PSUB_COLS =`<colgroup><col><col style="width:42px"><col style="width:42px"><col style="width:42px"></colgroup>`;
 function drawPlanner() {
   const only = root.plan.only;
   // Trainees: stars and potential on the first line, hint-level targets on the second,
@@ -1054,18 +1055,18 @@ function drawPlanner() {
       return `<tr><td title="${esc(D.items[id] || id)}">${esc(itemShort(id))}</td><td class="num">${n(need[id])}</td><td class="num">${n(have)}</td><td class="num gold">${n(Math.max(0, need[id] - have))}</td></tr>`;
     }).join("");
     const sHave = root.inv.shards[u.id] || 0;
-    return `<tr class="pu1"><td class="pname">${uName(u)}</td><td>${o.s}★</td><td><select class="mini" data-act="pus" data-id="${u.id}">${opts(so, ts)}</select></td>
-      <td class="num">${n(shards)}</td><td class="num">${shards ? n(sHave) : ""}</td><td class="num gold">${n(Math.max(0, shards - sHave))}</td>
-      <td class="num">P${o.p}</td><td><select class="mini" data-act="pup" data-id="${u.id}">${opts(po, tp)}</select></td>
+    return `<tr class="pu1"><td class="pname">${uName(u)}</td><td class="fit">${o.s}★</td><td class="fit"><select class="mini" data-act="pus" data-id="${u.id}">${opts(so, ts)}</select></td>
+      <td class="num fit">${n(shards)}</td><td class="num fit">${shards ? n(sHave) : ""}</td><td class="num gold fit">${n(Math.max(0, shards - sHave))}</td>
+      <td class="num fit">P${o.p}</td><td class="fit"><select class="mini" data-act="pup" data-id="${u.id}">${opts(po, tp)}</select></td><td class="fill"></td>
       <td class="pitems" rowspan="2">${il ? `<table class="sub">${PSUB_COLS}<tbody>${il}</tbody></table>` : ""}</td></tr>
-      <tr class="pu2"><td colspan="8"><div class="hrow">${hcells}</div></td></tr>`;
+      <tr class="pu2"><td colspan="9"><div class="hrow">${hcells}</div></td></tr>`;
   }).join("");
   $("pU").innerHTML = sect("pU", "Trainees", `<table class="ptab"><thead>
-    <tr><th rowspan="2">Trainee</th><th rowspan="2">Stars</th><th rowspan="2">Target</th><th colspan="3" class="grp">Shards</th>
-      <th rowspan="2" class="num">Pot</th><th rowspan="2">Target</th>
+    <tr><th rowspan="2">Trainee</th><th rowspan="2" class="fit">Stars</th><th rowspan="2" class="fit">Target</th><th colspan="3" class="grp fit">Shards</th>
+      <th rowspan="2" class="num fit">Pot</th><th rowspan="2" class="fit">Target</th><th rowspan="2" class="fill"></th>
       <th rowspan="2" class="pitems"><table class="sub">${PSUB_COLS}<thead><tr><th>Item</th><th class="num">Need</th><th class="num">Owned</th><th class="num">Left</th></tr></thead></table></th></tr>
-    <tr><th class="num">Need</th><th class="num">Owned</th><th class="num">Left</th></tr></thead>
-    <tbody>${urows || `<tr><td colspan="9" class="muted">—</td></tr>`}</tbody></table>`);
+    <tr><th class="num fit">Need</th><th class="num fit">Owned</th><th class="num fit">Left</th></tr></thead>
+    <tbody>${urows || `<tr><td colspan="10" class="muted">—</td></tr>`}</tbody></table>`);
   // Items: shoes first, then sashes, then the rest.
   const ik = Object.keys(items).sort((a, b) => itemOrder(a) - itemOrder(b));
   $("pI").innerHTML = sect("pI", "Items", `<table><thead><tr><th>Item</th><th class="num">Need</th><th class="num">Have</th><th class="num">Short</th></tr></thead><tbody>

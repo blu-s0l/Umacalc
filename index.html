@@ -1,0 +1,923 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Umacalc</title>
+<style>
+:root{
+  color-scheme:dark;
+  --bg:#0b0e13; --panel:#11161f; --panel2:#151b26; --line:#212a38; --line2:#2c3646;
+  --tx:#e6ebf2; --sub:#9aa6b8; --mut:#697588;
+  --blue:#4d9fff; --bluebg:rgba(77,159,255,.10);
+  --gold:#b08d3f;
+  --green:#2fd583; --greenbg:rgba(47,213,131,.10);
+  --red:#f4655f;   --redbg:rgba(244,101,95,.10);
+  --amber:#f0a832; --amberbg:rgba(240,168,50,.10);
+  --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,"Liberation Mono",monospace;
+  --sans:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{background:var(--bg);color:var(--tx);font-family:var(--sans);font-size:14px;line-height:1.5;
+     -webkit-font-smoothing:antialiased}
+.wrap{max-width:1280px;margin:0 auto;padding:22px 18px 80px}
+a{color:var(--blue)}
+h1,h2,h3{margin:0;font-weight:600;letter-spacing:-.01em}
+
+.card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:16px 20px;margin-bottom:14px}
+.head{font-size:10.5px;font-weight:700;color:var(--sub);text-transform:uppercase;letter-spacing:.1em;margin-bottom:10px}
+.muted{color:var(--mut);font-size:12px}
+.hint{font-size:11.5px;color:var(--mut);margin-top:6px}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end}
+.scroll{overflow-x:auto}
+.pos{color:var(--green)} .neg{color:var(--red)}
+
+label,.lbl{display:block;font-size:10px;font-weight:700;color:var(--mut);text-transform:uppercase;
+           letter-spacing:.08em;margin-bottom:4px}
+input,select,textarea{background:var(--panel2);border:1px solid var(--line2);color:var(--tx);border-radius:8px;
+  padding:7px 10px;font:inherit;font-size:13px;width:100%;outline:none}
+input:focus,select:focus,textarea:focus{border-color:var(--blue)}
+input[type=number]::-webkit-outer-spin-button,input[type=number]::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
+input[type=number]{-moz-appearance:textfield}
+input[type=checkbox]{width:auto;accent-color:var(--blue);margin:0 6px 0 0;vertical-align:middle}
+button{background:var(--panel2);border:1px solid var(--line2);color:var(--tx);border-radius:8px;
+  padding:7px 13px;font:inherit;font-size:13px;cursor:pointer;white-space:nowrap}
+button:hover{border-color:var(--blue);color:#fff}
+button.primary{background:var(--blue);border-color:var(--blue);color:#04101f;font-weight:600}
+button.primary:hover{background:#69b0ff;color:#04101f}
+button.danger{color:var(--red);border-color:rgba(244,101,95,.35)}
+button.danger:hover{background:var(--redbg);border-color:var(--red)}
+button.small{padding:4px 10px;font-size:12px}
+button.x{padding:1px 7px;font-size:12px;color:var(--mut)}
+.err{color:var(--red);font-size:12px;margin-top:5px}
+.okmsg{color:var(--green);font-size:12px;margin-top:5px}
+
+.fields{display:grid;grid-template-columns:repeat(auto-fit,minmax(136px,1fr));gap:10px}
+.fields>div{display:flex;flex-direction:column}
+.fields>div>label{margin-top:auto}
+
+.statrow{display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:10px}
+.metric{background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:9px 12px}
+.metric .k{font-size:9.5px;font-weight:700;color:var(--mut);text-transform:uppercase;letter-spacing:.08em}
+.metric .v{font-family:var(--mono);font-size:17px;font-weight:600;margin-top:2px;line-height:1.25}
+
+.pill{display:inline-block;font-size:10.5px;font-weight:700;letter-spacing:.05em;padding:2px 9px;
+      border-radius:999px;text-transform:uppercase}
+.pill.info{background:var(--bluebg);color:var(--blue);border:1px solid rgba(77,159,255,.3)}
+.pill.warn{background:var(--amberbg);color:var(--amber);border:1px solid rgba(240,168,50,.3)}
+.banner{border-radius:10px;padding:10px 14px;margin-bottom:12px;font-weight:600;font-size:13px}
+.banner.red{background:var(--redbg);border:1px solid rgba(244,101,95,.4);color:var(--red)}
+.banner.amber{background:var(--amberbg);border:1px solid rgba(240,168,50,.4);color:var(--amber)}
+
+.calbox{background:var(--bluebg);border:1px solid rgba(77,159,255,.28);border-radius:11px;padding:12px 15px;margin:0 0 12px}
+.calans{font-family:var(--mono);font-size:19px;font-weight:700;color:var(--blue)}
+.calsub{font-size:12.5px;color:var(--sub);margin-top:4px}
+.calsub b{color:var(--gold);font-weight:700}
+
+table{width:100%;border-collapse:collapse;font-size:12.5px}
+th{text-align:left;font-size:9.5px;font-weight:700;color:var(--mut);text-transform:uppercase;letter-spacing:.08em;
+   padding:6px 8px;border-bottom:1px solid var(--line2);white-space:nowrap}
+td{padding:5px 8px;border-bottom:1px solid var(--line);vertical-align:middle}
+td.num,th.num{text-align:right;font-family:var(--mono)}
+th[data-sort]{cursor:pointer}
+th[data-sort]:hover{color:var(--blue)}
+th.sorted{color:var(--blue)}
+tr.off td{opacity:.55}
+tr.sel td{color:var(--gold)}
+tr.sorted td{background:var(--bluebg)}
+
+.modal{display:none;position:fixed;inset:0;z-index:50;background:rgba(0,0,0,.6);
+       align-items:center;justify-content:center;padding:20px}
+.modal.open{display:flex}
+.modalcard{background:var(--panel);border:1px solid var(--line2);border-radius:14px;
+           padding:18px 22px;max-width:760px;width:100%;max-height:86vh;overflow:auto}
+
+.vbar{color:var(--gold);font-weight:700;padding:0 6px}
+
+/* --- app --- */
+.top{display:flex;align-items:center;gap:18px;flex-wrap:wrap;margin-bottom:16px}
+.brand{font-size:22px;font-weight:700;letter-spacing:-.02em}
+.brand span{color:var(--gold)}
+nav{display:flex;gap:4px;flex-wrap:wrap}
+nav a{padding:6px 12px;border-radius:8px;color:var(--sub);text-decoration:none;font-size:13px;font-weight:600;border:1px solid transparent}
+nav a:hover{color:var(--tx);border-color:var(--line2)}
+nav a.on{color:var(--blue);background:var(--bluebg);border-color:rgba(77,159,255,.3)}
+select.mini,input.mini{width:auto;padding:3px 6px;font-size:12px;border-radius:6px}
+input.mini{width:62px}
+.nm{color:var(--tx);cursor:pointer;font-weight:600;text-decoration:none}
+.nm:hover{color:var(--blue)}
+.ttl{font-size:11px;color:var(--mut)}
+.g{display:inline-block;width:1.45em;text-align:center;font-family:var(--mono);font-weight:700}
+.gS{color:var(--gold)} .gA{color:var(--tx)} .gB{color:var(--sub);font-weight:600} .gC{color:var(--mut);font-weight:500}
+.gD,.gE,.gF,.gG{color:#465062;font-weight:400}
+th.apt span{display:inline-block;width:1.45em;text-align:center;letter-spacing:0}
+td.apt,th.apt{padding-left:4px;padding-right:4px;white-space:nowrap}
+.ty{font-family:var(--mono);font-size:11px;color:var(--sub);text-transform:uppercase}
+.gold{color:var(--gold)}
+.mono{font-family:var(--mono)}
+.slots{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:8px;margin:10px 0}
+.slot{background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:8px}
+.slot.fr{border-style:dashed}
+.slot select{font-size:12px;padding:5px 6px}
+.slot .meta{font-size:11px;color:var(--mut);margin-top:4px;font-family:var(--mono)}
+.quota{display:grid;grid-template-columns:repeat(7,minmax(44px,64px));gap:6px}
+.quota input{padding:4px 6px;text-align:center;font-family:var(--mono)}
+.chips{display:flex;flex-wrap:wrap;gap:4px 10px;font-size:12px;color:var(--sub)}
+.chips .gold{font-weight:600}
+.dist td.dh{font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--gold);
+            padding-top:12px;border-bottom:1px solid var(--line2)}
+.bench{font-size:11.5px;color:var(--mut)}
+.pinrow{display:flex;gap:6px;align-items:center;margin-bottom:6px;flex-wrap:wrap}
+.pinrow .nm{min-width:180px}
+.pinrow select{width:auto}
+.split{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+footer{margin-top:24px}
+@media(max-width:900px){.slots{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media(max-width:660px){.split{grid-template-columns:1fr}.wrap{padding:16px 12px 60px}.slots{grid-template-columns:repeat(2,minmax(0,1fr))}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <div class="brand">Uma<span>calc</span></div>
+    <nav id="nav"></nav>
+  </header>
+  <div id="banner"></div>
+  <main id="view"></main>
+  <footer class="muted" id="foot"></footer>
+</div>
+<div class="modal" id="modal"><div class="modalcard" id="modalcard"></div></div>
+<script src="data.js"></script>
+<script>
+"use strict";
+const VERSION = "0.1";
+const D = window.UMA_DATA;
+const TODAY = new Date().toISOString().slice(0, 10);
+const NOW = Date.now() / 1000;
+const KEY = "umacalc.v1", SCHEMA = 1;
+
+const esc = s => String(s == null ? "" : s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const $ = id => document.getElementById(id);
+const opts = (list, cur) => list.map(([v, l]) => `<option value="${esc(v)}"${String(v) === String(cur) ? " selected" : ""}>${esc(l)}</option>`).join("");
+const f1 = v => (Math.round(v * 10) / 10).toFixed(1);
+const fN = v => Math.round(v).toLocaleString();
+const day = t => new Date(t * 1000).toISOString().slice(0, 10);
+
+/* ---------------- static data ---------------- */
+const UMAS = D.umas, UBY = {};
+UMAS.forEach(u => UBY[u.id] = u);
+const SUPS = D.sups, SBY = {};
+SUPS.forEach(s => SBY[s.id] = s);
+
+const TYPES = [["speed","Spd"],["stamina","Sta"],["power","Pow"],["guts","Gut"],["intelligence","Wit"],["friend","Frd"],["group","Grp"]];
+const TYPE_LBL = Object.fromEntries(TYPES);
+const RAR = ["", "R", "SR", "SSR"];
+const STAT = ["Spd", "Sta", "Pow", "Gut", "Wit"];
+const GRADES = "SABCDEFG";
+const STAR_SHARDS = [0, 0, 50, 100, 200, 300];     // cost to reach star i from i-1
+// Max level a card can reach at each limit break.
+const LVCAP = {1: [20,25,30,35,40], 2: [25,30,35,40,45], 3: [30,35,40,45,50]};
+// The breakpoints GameTora's effect arrays are keyed on; -1 means "not set here".
+const LV_PTS = [1,5,10,15,20,25,30,35,40,45,50];
+
+// Team Trials: five races, three runners each. Aptitude string order is
+// Turf Dirt | Sprint Mile Medium Long | Front Pace Late End.
+const DISTS = [
+  {n: "Sprint", surf: 0, dist: 2, w: [1, 0, 1, .5, .5]},
+  {n: "Mile",   surf: 0, dist: 3, w: [1, .2, 1, .3, .6]},
+  {n: "Medium", surf: 0, dist: 4, w: [1, .6, .8, .3, .5]},
+  {n: "Long",   surf: 0, dist: 5, w: [.8, 1.2, .6, .4, .5]},
+  {n: "Dirt",   surf: 1, dist: 3, w: [1, .2, 1.2, .4, .4]},
+];
+const STYLES = [{n: "Front", i: 6}, {n: "Pace", i: 7}, {n: "Late", i: 8}, {n: "End", i: 9}];
+
+// How much a grade costs in the race, roughly. B is one spark from A, so it stays
+// usable; C needs two and is usually not worth building around.
+const GMULT = {S: 1.03, A: 1, B: .85, C: .6, D: .3, E: 0, F: 0, G: 0};
+
+// Rough per-unit value of each support effect, for ranking cards against each other.
+// Friendship and training effectiveness dominate; a flat stat bonus is worth a few points.
+const W = {1:1, 2:.2, 3:4, 4:4, 5:4, 6:4, 7:4, 8:1.2, 9:.05, 10:.05, 11:.05, 12:.05, 13:.05,
+           14:.15, 15:.5, 16:.02, 17:1.5, 18:.08, 19:.15, 25:.1, 26:.1, 27:.1, 28:.15, 30:.3, 31:2, 32:.02, 41:4};
+const COND_UNIQUE = 6;   // conditional unique effects aren't modelled; credit them flat
+const EFF_PCT = new Set([1,2,8,15,16,18,25,26,27,28]);
+
+/* ---------------- state ---------------- */
+function blank() {
+  return {schema: SCHEMA, umas: {}, sups: {}, decks: [],
+          team: {pins: [], excl: [], minG: "B", alts: 8},
+          plan: {umas: {}, sups: {}, inv: {}, skills: [], only: false},
+          set: {jp: false}};
+}
+function normDeck(d) {
+  d.name = d.name || "Deck";
+  if (!Array.isArray(d.cards)) d.cards = [];
+  d.cards = d.cards.slice(0, 5);
+  while (d.cards.length < 5) d.cards.push(null);
+  if (d.friend === undefined) d.friend = null;
+  if (d.flb == null) d.flb = 4;
+  if (d.tr === undefined) d.tr = null;
+  if (!d.q) d.q = {speed: 2, stamina: 1, power: 1, guts: 0, intelligence: 1, friend: 0, group: 0};
+  return d;
+}
+function normalize(r) {
+  const b = blank();
+  if (!r || typeof r !== "object") r = {};
+  for (const k in b) {
+    if (r[k] == null || typeof r[k] !== typeof b[k] || Array.isArray(r[k]) !== Array.isArray(b[k])) r[k] = b[k];
+  }
+  for (const k of ["team", "plan", "set"]) for (const kk in b[k]) if (r[k][kk] == null) r[k][kk] = b[k][kk];
+  r.decks.forEach(normDeck);
+  r.schema = SCHEMA;
+  return r;
+}
+let saveErr = "", loadNote = "";
+function load() {
+  try {
+    const s = localStorage.getItem(KEY);
+    return normalize(s ? JSON.parse(s) : null);
+  } catch (e) {
+    saveErr = "Browser storage is unavailable (" + e.message + "). Changes will not survive a reload — export a backup from Data.";
+    return normalize(null);
+  }
+}
+function save() {
+  try {
+    localStorage.setItem(KEY, JSON.stringify(root));
+    if (saveErr) { saveErr = ""; drawBanner(); }
+    return true;
+  } catch (e) {
+    saveErr = "Not saved — browser storage refused the write (" + e.message + "). Export a backup from Data before closing this tab.";
+    drawBanner();
+    return false;
+  }
+}
+let root = load();
+const UI = {tq: "", tOwn: "all", tDist: "", tSty: "", tSort: ["name", 1],
+            sq: "", sType: "", sRar: "", sOwn: "all", sSort: ["score", -1],
+            team: null, teamIdx: 0, hq: ""};
+
+const avail = x => root.set.jp || (!!x.en && x.en <= TODAY);
+
+/* ---------------- trainee helpers ---------------- */
+const uStats = (u, star) => u.s[star] || u.s[u.r];
+const uStar = u => (root.umas[u.id] || {}).s || 0;
+function ownedUmas() {
+  return Object.keys(root.umas).map(id => UBY[id]).filter(u => u && avail(u));
+}
+const gr = g => `<span class="g g${g}">${g}</span>`;
+const aptTd = (u, a, b) => `<td class="apt">${[...u.a.slice(a, b)].map(gr).join("")}</td>`;
+const APT_TH = `<th class="apt"><span>Tf</span><span>Dt</span></th><th class="apt"><span>Sp</span><span>Mi</span><span>Md</span><span>Lg</span></th><th class="apt"><span>Fr</span><span>Pc</span><span>Lt</span><span>En</span></th>`;
+const growth = u => u.g.map((v, i) => v ? `${STAT[i]} <span class="gold">${v}</span>` : "").filter(Boolean).join(" ");
+const uName = u => `<a class="nm" data-act="uinfo" data-id="${u.id}">${esc(u.n)}</a><div class="ttl">${esc(u.t)}</div>`;
+
+/* ---------------- support helpers ---------------- */
+function effAt(arr, lv) {
+  let pi = -1, ni = -1;
+  for (let i = 0; i < arr.length; i++) {
+    if (arr[i] === -1) continue;
+    if (LV_PTS[i] <= lv) pi = i; else if (ni < 0) ni = i;
+  }
+  if (pi < 0) return 0;
+  if (LV_PTS[pi] === lv || ni < 0) return arr[pi];
+  return Math.floor(arr[pi] + (arr[ni] - arr[pi]) * (lv - LV_PTS[pi]) / (LV_PTS[ni] - LV_PTS[pi]));
+}
+const maxLv = (s, lb) => LVCAP[s.r][lb];
+function supEff(s, lv) {
+  const o = {};
+  for (const k in s.ef) { const v = effAt(s.ef[k], lv); if (v) o[k] = v; }
+  let cond = false;
+  if (s.u && lv >= s.u.lv) for (const [t, v] of s.u.ef) {
+    if (t < 100) { if (v) o[t] = (o[t] || 0) + v; } else cond = true;
+  }
+  return {o, cond};
+}
+function supScore(s, lv) {
+  const {o, cond} = supEff(s, lv);
+  let t = cond ? COND_UNIQUE : 0;
+  for (const k in o) t += (W[k] || 0) * o[k];
+  return t;
+}
+const own = s => root.sups[s.id];
+const curLv = s => { const o = own(s); return o ? Math.min(o.lv || maxLv(s, o.lb), maxLv(s, o.lb)) : maxLv(s, 4); };
+function ownedSups() { return Object.keys(root.sups).map(id => SBY[id]).filter(s => s && avail(s)); }
+const sName = s => `<a class="nm" data-act="sinfo" data-id="${s.id}">${esc(s.n)}</a><div class="ttl">${esc(s.t)}</div>`;
+const sLabel = (s, lb) => `${s.n} ${RAR[s.r]}` + (lb != null ? ` LB${lb}` : "") + ` · ${s.t}`;
+const statPlus = o => (o[3] || 0) + (o[4] || 0) + (o[5] || 0) + (o[6] || 0) + (o[7] || 0) + (o[41] || 0) * 5;
+const skName = id => (D.skills[id] || ["#" + id])[0];
+const skGold = id => (D.skills[id] || [0, 1])[1] >= 2;
+function banners(b) {
+  let last = null, next = null;
+  for (const [t, est] of b) {
+    if (t <= NOW) last = t; else if (!next) next = [t, est];
+  }
+  return {last: last ? day(last) : "", next: next ? day(next[0]) + (next[1] ? " est" : "") : ""};
+}
+
+/* ---------------- nav / shell ---------------- */
+const TABS = [["trainees","Trainees"],["supports","Supports"],["decks","Decks"],["teams","Teams"],["planner","Planner"],["data","Data"]];
+const VIEWS = {};
+let tab = "trainees";
+function go() {
+  const h = location.hash.slice(1);
+  tab = TABS.some(t => t[0] === h) ? h : "trainees";
+  $("nav").innerHTML = TABS.map(([k, n]) => `<a href="#${k}" class="${k === tab ? "on" : ""}">${n}</a>`).join("");
+  VIEWS[tab]();
+}
+function drawBanner() {
+  $("banner").innerHTML = (saveErr ? `<div class="banner red">${esc(saveErr)}</div>` : "") +
+    (loadNote ? `<div class="banner amber">${esc(loadNote)}</div>` : "");
+}
+const view = $("view");
+
+/* ---------------- Trainees ---------------- */
+VIEWS.trainees = () => {
+  const dOpts = [["", "Any"], ...DISTS.map((d, i) => [i, d.n])];
+  const sOpts = [["", "Any"], ...STYLES.map((s, i) => [i, s.n])];
+  view.innerHTML = `<div class="card"><div class="fields">
+    <div><label>Search</label><input id="tq" value="${esc(UI.tq)}" placeholder="Name or title"></div>
+    <div><label>Show</label><select id="tOwn">${opts([["all","All"],["own","Owned"],["not","Not owned"]], UI.tOwn)}</select></div>
+    <div><label>Distance A+</label><select id="tDist">${opts(dOpts, UI.tDist)}</select></div>
+    <div><label>Style A+</label><select id="tSty">${opts(sOpts, UI.tSty)}</select></div>
+  </div><div class="hint" id="tCount"></div></div>
+  <div class="card scroll" id="tTable"></div>`;
+  drawTrainees();
+};
+function drawTrainees() {
+  const q = UI.tq.trim().toLowerCase();
+  const isA = g => g === "S" || g === "A";
+  let list = UMAS.filter(u => avail(u)
+    && (!q || (u.n + " " + u.t).toLowerCase().includes(q))
+    && (UI.tOwn === "all" || (UI.tOwn === "own") === !!root.umas[u.id])
+    && (UI.tDist === "" || (isA(u.a[DISTS[UI.tDist].dist]) && isA(u.a[DISTS[UI.tDist].surf])))
+    && (UI.tSty === "" || isA(u.a[STYLES[UI.tSty].i])));
+  const [key, dir] = UI.tSort;
+  const kv = u => {
+    const st = uStats(u, uStar(u) || u.r);
+    if (key === "name") return u.n + u.t;
+    if (key === "star") return uStar(u);
+    if (key === "tot") return st.reduce((a, b) => a + b, 0);
+    return st[+key];
+  };
+  list.sort((a, b) => { const x = kv(a), y = kv(b); return (x < y ? -1 : x > y ? 1 : 0) * dir; });
+  const nOwn = ownedUmas().length;
+  $("tCount").textContent = `${list.length} shown · ${nOwn} owned`;
+  const th = (k, l, c = "") => `<th data-sort="${k}" data-tab="t" class="${c}${key === k ? " sorted" : ""}">${l}${key === k ? (dir > 0 ? " ▴" : " ▾") : ""}</th>`;
+  const rows = list.map(u => {
+    const o = root.umas[u.id], star = o ? o.s : 0, st = uStats(u, star || u.r);
+    const starOpts = [["0", "—"]];
+    for (let i = u.r; i <= 5; i++) starOpts.push([i, i + "★"]);
+    return `<tr class="${o ? "" : "off"}"><td>${uName(u)}</td>
+      <td><select class="mini" data-act="ustar" data-id="${u.id}">${opts(starOpts, star)}</select></td>
+      <td><select class="mini" data-act="upot" data-id="${u.id}"${o ? "" : " disabled"}>${opts([1,2,3,4,5].map(i => [i, "P" + i]), o ? o.p : 1)}</select></td>
+      ${st.map(v => `<td class="num">${v}</td>`).join("")}<td class="num">${st.reduce((a, b) => a + b, 0)}</td>
+      <td class="muted mono">${growth(u)}</td>${aptTd(u, 0, 2)}${aptTd(u, 2, 6)}${aptTd(u, 6, 10)}</tr>`;
+  }).join("");
+  $("tTable").innerHTML = `<table><thead><tr>${th("name", "Trainee")}${th("star", "Stars")}<th>Pot</th>
+    ${STAT.map((s, i) => th(String(i), s, "num")).join("")}${th("tot", "Total", "num")}<th>Growth</th>${APT_TH}</tr></thead>
+    <tbody>${rows}</tbody></table>`;
+}
+function uInfo(u) {
+  const o = root.umas[u.id];
+  const rows = [1,2,3,4,5].filter(i => u.s[i]).map(i => `<tr${o && o.s === i ? ' class="sel"' : ""}><td>${i}★</td>${u.s[i].map(v => `<td class="num">${v}</td>`).join("")}<td class="num">${u.s[i].reduce((a, b) => a + b, 0)}</td></tr>`).join("");
+  const bn = u.b.map(([t, e]) => day(t) + (e ? " est" : "")).join(" · ");
+  const tg = D.talent[u.tg] || [];
+  const pot = tg.map((c, i) => `<tr><td>P${i + 2}</td><td class="muted">${c.map(([id, n]) => `${esc(D.items[id] || id)} <span class="gold mono">${n}</span>`).join(" · ")}</td></tr>`).join("");
+  modal(`<div class="head">${esc(u.n)} · ${esc(u.t)}</div>
+    <div class="scroll"><table><thead><tr><th>Stars</th>${STAT.map(s => `<th class="num">${s}</th>`).join("")}<th class="num">Total</th></tr></thead><tbody>${rows}</tbody></table></div>
+    <div class="scroll" style="margin-top:12px"><table><thead><tr>${APT_TH}<th>Growth</th></tr></thead><tbody><tr>${aptTd(u, 0, 2)}${aptTd(u, 2, 6)}${aptTd(u, 6, 10)}<td class="mono muted">${growth(u)}</td></tr></tbody></table></div>
+    <div class="hint">Unique: ${esc(u.u ? skName(u.u) : "—")}${u.en ? " · Global " + u.en : " · JP only"}</div>
+    ${bn ? `<div class="hint">Banners: ${bn}</div>` : ""}
+    ${pot ? `<details open><summary>Potential costs</summary><table><tbody>${pot}</tbody></table></details>` : ""}`);
+}
+
+/* ---------------- Supports ---------------- */
+VIEWS.supports = () => {
+  view.innerHTML = `<div class="card"><div class="fields">
+    <div><label>Search</label><input id="sq" value="${esc(UI.sq)}" placeholder="Name, title or skill"></div>
+    <div><label>Type</label><select id="sType">${opts([["", "All"], ...TYPES], UI.sType)}</select></div>
+    <div><label>Rarity</label><select id="sRar">${opts([["", "All"], ["3", "SSR"], ["2", "SR"], ["1", "R"]], UI.sRar)}</select></div>
+    <div><label>Show</label><select id="sOwn">${opts([["all","All"],["own","Owned"],["not","Not owned"]], UI.sOwn)}</select></div>
+  </div><div class="hint" id="sCount"></div></div>
+  <div class="card scroll" id="sTable"></div>`;
+  drawSupports();
+};
+function drawSupports() {
+  const q = UI.sq.trim().toLowerCase();
+  const hit = s => !q || (s.n + " " + s.t).toLowerCase().includes(q) || s.h.concat(s.e).some(id => skName(id).toLowerCase().includes(q));
+  const list = SUPS.filter(s => avail(s) && hit(s)
+    && (!UI.sType || s.ty === UI.sType) && (!UI.sRar || s.r === +UI.sRar)
+    && (UI.sOwn === "all" || (UI.sOwn === "own") === !!own(s)))
+    .map(s => { const lv = curLv(s), e = supEff(s, lv); return {s, lv, o: e.o, cond: e.cond, sc: supScore(s, lv)}; });
+  const [key, dir] = UI.sSort;
+  const kv = r => key === "name" ? r.s.n + r.s.t : key === "score" ? r.sc : key === "lb" ? (own(r.s) ? own(r.s).lb : -1)
+    : key === "type" ? TYPES.findIndex(t => t[0] === r.s.ty) * 10 - r.s.r : key === "stat" ? statPlus(r.o) : (r.o[key] || 0);
+  list.sort((a, b) => { const x = kv(a), y = kv(b); return (x < y ? -1 : x > y ? 1 : 0) * dir; });
+  $("sCount").textContent = `${list.length} shown · ${ownedSups().length} owned · unowned at LB4`;
+  const th = (k, l, c = "") => `<th data-sort="${k}" data-tab="s" class="${c}${key === k ? " sorted" : ""}">${l}${key === k ? (dir > 0 ? " ▴" : " ▾") : ""}</th>`;
+  const cell = (o, k) => `<td class="num">${o[k] || ""}</td>`;
+  $("sTable").innerHTML = `<table><thead><tr>${th("type", "Type")}${th("name", "Card")}${th("lb", "LB")}<th class="num">Lv</th>
+    ${th("score", "Score", "num")}${th("1", "Friend", "num")}${th("8", "Train", "num")}${th("2", "Mood", "num")}${th("15", "Race", "num")}${th("19", "Spec", "num")}${th("14", "Gauge", "num")}${th("stat", "Stat+", "num")}<th class="num">Hints</th></tr></thead><tbody>
+    ${list.map(({s, lv, o, cond, sc}) => {
+      const ow = own(s);
+      return `<tr class="${ow ? "" : "off"}"><td><span class="ty">${RAR[s.r]} ${TYPE_LBL[s.ty]}</span></td><td>${sName(s)}</td>
+      <td><select class="mini" data-act="slb" data-id="${s.id}">${opts([["", "—"], [0, "0"], [1, "1"], [2, "2"], [3, "3"], [4, "4"]], ow ? ow.lb : "")}</select></td>
+      <td class="num">${lv}</td><td class="num gold">${f1(sc)}${cond ? "*" : ""}</td>${cell(o, 1)}${cell(o, 8)}${cell(o, 2)}${cell(o, 15)}${cell(o, 19)}${cell(o, 14)}<td class="num">${statPlus(o) || ""}</td><td class="num">${s.h.length}</td></tr>`;
+    }).join("")}</tbody></table><div class="hint">* conditional unique effect</div>`;
+}
+function sInfo(s) {
+  const ids = new Set();
+  [0,1,2,3,4].forEach(lb => Object.keys(supEff(s, maxLv(s, lb)).o).forEach(k => ids.add(+k)));
+  const effs = [...ids].sort((a, b) => a - b);
+  const ow = own(s);
+  const per = [0,1,2,3,4].map(lb => supEff(s, maxLv(s, lb)).o);
+  const rows = effs.map(k => `<tr><td>${esc(D.effects[k] || "#" + k)}</td>${per.map((o, lb) => `<td class="num${ow && ow.lb === lb ? " gold" : ""}">${o[k] ? o[k] + (EFF_PCT.has(k) ? "%" : "") : ""}</td>`).join("")}</tr>`).join("");
+  const uq = s.u ? s.u.ef.map(([t, v]) => t < 100 ? `${esc(D.effects[t] || "#" + t)} ${v}` : "conditional").join(" · ") : "";
+  const sk = ids => ids.map(id => `<span class="${skGold(id) ? "gold" : ""}">${esc(skName(id))}</span>`).join(" · ");
+  const bn = s.b.map(([t, e]) => day(t) + (e ? " est" : "")).join(" · ");
+  modal(`<div class="head">${RAR[s.r]} ${TYPE_LBL[s.ty]} · ${esc(s.n)} · ${esc(s.t)}</div>
+    <div class="scroll"><table><thead><tr><th>Effect</th>${[0,1,2,3,4].map(lb => `<th class="num">LB${lb} · ${maxLv(s, lb)}</th>`).join("")}</tr></thead><tbody>${rows}</tbody></table></div>
+    ${uq ? `<div class="hint">Unique (Lv${s.u.lv}): ${uq}${s.ud ? " — " + esc(s.ud) : ""}</div>` : ""}
+    <div class="hint">Score: ${[0,1,2,3,4].map(lb => `<span class="gold mono">${f1(supScore(s, maxLv(s, lb)))}</span>`).join('<span class="vbar">|</span>')}</div>
+    <details open><summary>Hints</summary><div class="chips">${sk(s.h) || "—"}</div></details>
+    <details open><summary>Events</summary><div class="chips">${sk(s.e) || "—"}</div></details>
+    <div class="hint">${s.en ? "Global " + s.en : "JP only"}${bn ? " · Banners: " + bn : ""}</div>`);
+}
+
+/* ---------------- Decks ---------------- */
+VIEWS.decks = () => {
+  view.innerHTML = `<div class="row" style="margin-bottom:12px"><button class="primary" data-act="dnew">New deck</button></div><div id="decks"></div>`;
+  drawDecks();
+};
+function deckRows(d) {
+  return d.cards.map(id => id && SBY[id] ? {s: SBY[id], lv: curLv(SBY[id]), lb: (own(SBY[id]) || {}).lb} : null)
+    .concat([d.friend && SBY[d.friend] ? {s: SBY[d.friend], lv: maxLv(SBY[d.friend], d.flb), lb: d.flb, fr: true} : null]);
+}
+function drawDecks() {
+  const mine = ownedSups().map(s => ({s, sc: supScore(s, curLv(s))})).sort((a, b) => b.sc - a.sc);
+  const all = SUPS.filter(avail).filter(s => s.r === 3 || s.ty === "friend" || s.ty === "group");
+  const groupOpts = (list, cur, lbOf) => `<option value="">—</option>` + TYPES.map(([t, l]) => {
+    const g = list.filter(x => x.s.ty === t);
+    return g.length ? `<optgroup label="${l}">${g.map(x => `<option value="${x.s.id}"${x.s.id === cur ? " selected" : ""}>${esc(sLabel(x.s, lbOf(x.s)))}</option>`).join("")}</optgroup>` : "";
+  }).join("");
+  const frList = all.map(s => ({s, sc: supScore(s, maxLv(s, 4))})).sort((a, b) => b.sc - a.sc);
+  const trOpts = [["", "—"], ...ownedUmas().sort((a, b) => a.n.localeCompare(b.n)).map(u => [u.id, `${u.n} · ${u.t}`])];
+  if (!root.decks.length) { $("decks").innerHTML = `<div class="card muted">No decks.</div>`; return; }
+  $("decks").innerHTML = root.decks.map((d, i) => {
+    const rows = deckRows(d);
+    const tot = {}; let score = 0, cond = 0;
+    const types = {}, hints = new Map(), chars = new Map();
+    const tr = d.tr && UBY[d.tr];
+    if (tr) chars.set(tr.c, 1);
+    const warn = [];
+    rows.forEach(r => {
+      if (!r) return;
+      const e = supEff(r.s, r.lv);
+      for (const k in e.o) tot[k] = (tot[k] || 0) + e.o[k];
+      if (e.cond) cond++;
+      score += supScore(r.s, r.lv);
+      types[r.s.ty] = (types[r.s.ty] || 0) + 1;
+      r.s.h.forEach(h => hints.set(h, (hints.get(h) || 0) + 1));
+      if (chars.has(r.s.c)) warn.push(`${r.s.n} appears twice` + (tr && tr.c === r.s.c ? " (trainee)" : ""));
+      chars.set(r.s.c, 1);
+    });
+    const slot = (r, j) => {
+      const fr = j === 5;
+      const sel = fr
+        ? `<select data-act="dfr" data-i="${i}">${groupOpts(frList, d.friend, () => null)}</select>
+           <select class="mini" data-act="dflb" data-i="${i}" style="margin-top:4px">${opts([0,1,2,3,4].map(v => [v, "LB" + v]), d.flb)}</select>`
+        : `<select data-act="dcard" data-i="${i}" data-j="${j}">${groupOpts(mine, d.cards[j], s => own(s).lb)}</select>`;
+      const meta = r ? `${RAR[r.s.r]} ${TYPE_LBL[r.s.ty]} · Lv${r.lv} · <span class="gold">${f1(supScore(r.s, r.lv))}</span>` : "&nbsp;";
+      return `<div class="slot${fr ? " fr" : ""}"><label>${fr ? "Friend" : j + 1}</label>${sel}<div class="meta">${meta}</div></div>`;
+    };
+    const m = (k, l, v) => `<div class="metric"><div class="k">${l}</div><div class="v">${v}</div></div>`;
+    const hl = [...hints.keys()].sort((a, b) => (skGold(b) - skGold(a)) || skName(a).localeCompare(skName(b)));
+    return `<div class="card">
+      <div class="row"><div style="flex:1;min-width:160px"><label>Name</label><input data-act="dname" data-i="${i}" value="${esc(d.name)}"></div>
+        <div style="flex:1;min-width:200px"><label>Trainee</label><select data-act="dtr" data-i="${i}">${opts(trOpts, d.tr || "")}</select></div>
+        <button class="small" data-act="dauto" data-i="${i}">Auto-fill</button>
+        <button class="small" data-act="dclear" data-i="${i}">Clear</button>
+        <button class="small" data-act="dcopy" data-i="${i}">Copy</button>
+        <button class="small danger" data-act="ddel" data-i="${i}">Delete</button></div>
+      <div class="slots">${rows.map(slot).join("")}</div>
+      <div class="row" style="align-items:center;margin-bottom:10px"><span class="lbl" style="margin:0">Auto-fill mix</span>
+        <div class="quota">${TYPES.map(([t, l]) => `<div><label>${l}</label><input type="number" min="0" max="5" data-act="dq" data-i="${i}" data-t="${t}" value="${d.q[t] || 0}"></div>`).join("")}</div></div>
+      ${warn.length ? `<div class="banner amber">${warn.map(esc).join(" · ")}</div>` : ""}
+      <div class="statrow">${m("", "Score", f1(score) + (cond ? "*" : ""))}${m(1, "Friend", tot[1] || 0)}${m(8, "Train", tot[8] || 0)}${m(2, "Mood", tot[2] || 0)}${m(15, "Race", tot[15] || 0)}${m(19, "Spec", tot[19] || 0)}${m(0, "Stat+", statPlus(tot))}</div>
+      <div class="hint mono">${TYPES.filter(([t]) => types[t]).map(([t, l]) => `${l} ${types[t]}`).join('<span class="vbar">|</span>')}</div>
+      <details><summary>Hints · ${hl.length}</summary><div class="chips">${hl.map(h => `<span class="${skGold(h) ? "gold" : ""}">${esc(skName(h))}${hints.get(h) > 1 ? " ×" + hints.get(h) : ""}</span>`).join("")}</div></details>
+    </div>`;
+  }).join("");
+}
+function autoDeck(d) {
+  const used = new Set();
+  const tr = d.tr && UBY[d.tr];
+  if (tr) used.add(tr.c);
+  const need = {...d.q};
+  for (const id of d.cards.concat(d.friend)) {
+    const s = id && SBY[id];
+    if (!s) continue;
+    used.add(s.c);
+    if (id !== d.friend) need[s.ty] = (need[s.ty] || 0) - 1;
+  }
+  const pool = ownedSups().map(s => ({s, sc: supScore(s, curLv(s))})).sort((a, b) => b.sc - a.sc);
+  for (let i = 0; i < 5; i++) {
+    if (d.cards[i]) continue;
+    const pick = pool.find(p => !used.has(p.s.c) && need[p.s.ty] > 0) || pool.find(p => !used.has(p.s.c));
+    if (!pick) break;
+    d.cards[i] = pick.s.id; used.add(pick.s.c); need[pick.s.ty] = (need[pick.s.ty] || 0) - 1;
+  }
+  if (!d.friend) {
+    // Borrow the strongest card of the type the mix leans on most.
+    const main = TYPES.map(t => t[0]).sort((a, b) => (d.q[b] || 0) - (d.q[a] || 0))[0];
+    const best = SUPS.filter(s => avail(s) && s.r === 3 && s.ty === main && !used.has(s.c))
+      .map(s => ({s, sc: supScore(s, maxLv(s, d.flb))})).sort((a, b) => b.sc - a.sc)[0];
+    if (best) d.friend = best.s.id;
+  }
+}
+
+/* ---------------- Teams ---------------- */
+function slotFit(u, star, di, si, minG) {
+  const d = DISTS[di];
+  const g = [u.a[d.surf], u.a[d.dist], u.a[STYLES[si].i]];
+  const lim = GRADES.indexOf(minG);
+  if (g.some(x => GRADES.indexOf(x) > lim)) return null;
+  let m = g.reduce((p, x) => p * GMULT[x], 1);
+  // A pinned trainee (minG "G") is placed even on an unusable aptitude; it just scores near zero.
+  if (m <= 0) { if (minG !== "G") return null; m = .05; }
+  // Sparks: grade steps short of A, i.e. how much inheritance it takes to make the slot comfortable.
+  const sp = g.reduce((n, x) => n + Math.max(0, GRADES.indexOf(x) - 1), 0);
+  const st = uStats(u, star), w = d.w;
+  const ws = w.reduce((a, b) => a + b, 0);
+  const stat = st.reduce((a, v, i) => a + v * w[i], 0) / ws;          // base stats at owned stars
+  const grow = u.g.reduce((a, v, i) => a + v * w[i], 0) / ws;         // growth bonus %
+  const sc = 100 * m + (stat - 85) / 4 + grow * .3;
+  return {sc, g, sp};
+}
+function teamPool() {
+  const pins = new Map();
+  root.team.pins.forEach(p => { const u = UBY[p.id]; if (u) pins.set(u.c, p); });
+  const excl = new Set(root.team.excl);
+  const byChar = new Map();
+  for (const u of ownedUmas()) {
+    if (excl.has(u.id)) continue;
+    const p = pins.get(u.c);
+    if (p && p.id !== u.id) continue;
+    if (!byChar.has(u.c)) byChar.set(u.c, []);
+    byChar.get(u.c).push(u);
+  }
+  return {byChar, pins};
+}
+const PIN_BONUS = 1000;
+// Weighted bipartite assignment as min-cost flow:
+// source → character (1) → (race, style) slot (1) → race (3) → sink.
+// One card per character, one runner per style per race, three runners per race.
+function solveTeam(pool, ban) {
+  const chars = [...pool.byChar.keys()].filter(c => !ban.has(c));
+  const C = chars.length, NS = 20, S = 0, T = C + NS + 6;
+  const N = T + 1, to = [], cap = [], cost = [], head = new Array(N).fill(-1), nxt = [], info = [];
+  const add = (a, b, c, w, inf) => {
+    to.push(b); cap.push(c); cost.push(w); nxt.push(head[a]); head[a] = to.length - 1; info.push(inf);
+    to.push(a); cap.push(0); cost.push(-w); nxt.push(head[b]); head[b] = to.length - 1; info.push(null);
+  };
+  chars.forEach((c, ci) => {
+    add(S, 1 + ci, 1, 0, null);
+    const pin = pool.pins.get(c);
+    for (let di = 0; di < 5; di++) for (let si = 0; si < 4; si++) {
+      if (pin && ((pin.d != null && pin.d !== di) || (pin.s != null && pin.s !== si))) continue;
+      let best = null;
+      for (const u of pool.byChar.get(c)) {
+        const f = slotFit(u, uStar(u), di, si, pin ? "G" : root.team.minG);
+        if (f && (!best || f.sc > best.f.sc)) best = {u, f};
+      }
+      if (!best) continue;
+      add(1 + ci, 1 + C + di * 4 + si, 1, -(best.f.sc + (pin ? PIN_BONUS : 0)), {c, u: best.u, di, si, f: best.f});
+    }
+  });
+  for (let k = 0; k < NS; k++) add(1 + C + k, 1 + C + NS + Math.floor(k / 4), 1, 0, null);
+  for (let di = 0; di < 5; di++) add(1 + C + NS + di, T, 3, 0, null);
+  // Successive shortest paths; stop once another runner would lower the total.
+  for (let it = 0; it < 15; it++) {
+    const dist = new Array(N).fill(Infinity), prev = new Array(N).fill(-1), inq = new Array(N).fill(false);
+    dist[S] = 0; const q = [S]; inq[S] = true;
+    while (q.length) {
+      const a = q.shift(); inq[a] = false;
+      for (let e = head[a]; e !== -1; e = nxt[e]) {
+        if (cap[e] > 0 && dist[a] + cost[e] < dist[to[e]] - 1e-9) {
+          dist[to[e]] = dist[a] + cost[e]; prev[to[e]] = e;
+          if (!inq[to[e]]) { inq[to[e]] = true; q.push(to[e]); }
+        }
+      }
+    }
+    if (dist[T] === Infinity || dist[T] >= 0) break;
+    for (let v = T; v !== S; v = to[prev[v] ^ 1]) { cap[prev[v]]--; cap[prev[v] ^ 1]++; }
+  }
+  const members = [];
+  for (let e = 0; e < to.length; e += 2) if (info[e] && cap[e] === 0) members.push(info[e]);
+  members.sort((a, b) => a.di * 4 + a.si - (b.di * 4 + b.si));
+  const score = members.reduce((a, m) => a + m.f.sc, 0);
+  const sig = members.map(m => `${m.u.id}@${m.di}${m.si}`).join(",");
+  return {members, score, sig, sparks: members.reduce((a, m) => a + m.f.sp, 0)};
+}
+function buildTeams() {
+  const pool = teamPool();
+  const best = solveTeam(pool, new Set());
+  const seen = new Map([[best.sig, best]]);
+  const pinned = new Set(pool.pins.keys());
+  const expand = (t, ban) => {
+    const out = [];
+    for (const m of t.members) {
+      if (pinned.has(m.c)) continue;
+      const b = new Set(ban); b.add(m.c);
+      const r = solveTeam(pool, b);
+      r.ban = b;
+      if (!seen.has(r.sig)) { seen.set(r.sig, r); out.push(r); }
+    }
+    return out;
+  };
+  // Alternatives: drop each member of the best team in turn, then do the same for the
+  // three strongest of those, and rank everything that comes out.
+  const lvl1 = expand(best, new Set()).sort((a, b) => b.score - a.score);
+  lvl1.slice(0, 3).forEach(t => expand(t, t.ban));
+  const teams = [...seen.values()].sort((a, b) => b.members.length - a.members.length || b.score - a.score);
+  return {teams: teams.slice(0, 1 + Math.max(0, root.team.alts)), pool};
+}
+VIEWS.teams = () => {
+  view.innerHTML = `<div class="card" id="teamCtl"></div><div id="teamOut"></div>`;
+  drawTeamCtl();
+  drawTeamOut();
+};
+function drawTeamCtl() {
+  const owned = ownedUmas().sort((a, b) => a.n.localeCompare(b.n) || a.t.localeCompare(b.t));
+  const uo = [["", "Add…"], ...owned.map(u => [u.id, `${u.n} · ${u.t}`])];
+  const pins = root.team.pins.map((p, i) => {
+    const u = UBY[p.id]; if (!u) return "";
+    return `<div class="pinrow"><span class="nm">${esc(u.n)} <span class="ttl">${esc(u.t)}</span></span>
+      <select class="mini" data-act="pind" data-i="${i}">${opts([["", "Any race"], ...DISTS.map((d, k) => [k, d.n])], p.d == null ? "" : p.d)}</select>
+      <select class="mini" data-act="pins" data-i="${i}">${opts([["", "Any style"], ...STYLES.map((s, k) => [k, s.n])], p.s == null ? "" : p.s)}</select>
+      <button class="x" data-act="pinx" data-i="${i}">×</button></div>`;
+  }).join("");
+  const excl = root.team.excl.map((id, i) => UBY[id] ? `<div class="pinrow"><span class="nm">${esc(UBY[id].n)} <span class="ttl">${esc(UBY[id].t)}</span></span><button class="x" data-act="exx" data-i="${i}">×</button></div>` : "").join("");
+  $("teamCtl").innerHTML = `<div class="split">
+    <div><div class="head">Must include</div>${pins}<select data-act="pinadd" style="max-width:340px">${opts(uo, "")}</select></div>
+    <div><div class="head">Exclude</div>${excl}<select data-act="exadd" style="max-width:340px">${opts(uo, "")}</select></div></div>
+    <div class="row" style="margin-top:14px">
+      <div style="width:150px"><label>Lowest aptitude</label><select data-act="ming">${opts([["A","A"],["B","B"],["C","C"]], root.team.minG)}</select></div>
+      <div style="width:110px"><label>Alternatives</label><input type="number" min="0" max="30" data-act="alts" value="${root.team.alts}"></div>
+      <button class="primary" data-act="build">Build team</button>
+      <span class="muted">${owned.length} owned</span></div>`;
+}
+function drawTeamOut() {
+  const R = UI.team;
+  if (!R) { $("teamOut").innerHTML = ""; return; }
+  const {teams, pool} = R;
+  const t = teams[Math.min(UI.teamIdx, teams.length - 1)];
+  if (!t || !t.members.length) { $("teamOut").innerHTML = `<div class="card muted">No eligible trainees.</div>`; return; }
+  const inTeam = new Set(t.members.map(m => m.c));
+  // Bench: the best unused trainees for each slot, so a swap is one glance away.
+  const bench = (di, si) => {
+    const c = [];
+    for (const [ch, us] of pool.byChar) {
+      if (inTeam.has(ch)) continue;
+      for (const u of us) { const f = slotFit(u, uStar(u), di, si, root.team.minG); if (f) c.push({u, f}); }
+    }
+    return c.sort((a, b) => b.f.sc - a.f.sc).slice(0, 2).map(x => `${esc(x.u.n)} <span class="mono">${f1(x.f.sc)}</span>`).join(" · ");
+  };
+  const pinned = new Set(pool.pins.keys());
+  let body = "";
+  DISTS.forEach((d, di) => {
+    const ms = t.members.filter(m => m.di === di);
+    body += `<tr><td class="dh" colspan="7">${d.n}${d.n === "Dirt" ? " · Mile" : ""}<span class="muted" style="letter-spacing:0;text-transform:none;font-weight:400"> ${ms.length}/3</span></td></tr>`;
+    ms.forEach(m => {
+      body += `<tr><td>${STYLES[m.si].n}</td><td>${uName(m.u)}</td><td class="num">${uStar(m.u)}★</td>
+        <td class="apt">${m.f.g.map(gr).join("")}</td><td class="num">${m.f.sp ? "+" + m.f.sp : ""}</td>
+        <td class="num gold">${f1(m.f.sc)}${pinned.has(m.c) ? " ⚑" : ""}</td><td class="bench">${bench(di, m.si)}</td></tr>`;
+    });
+  });
+  const best = teams[0];
+  const diff = (a, b) => {
+    const A = new Map(a.members.map(m => [m.c, m])), B = new Map(b.members.map(m => [m.c, m]));
+    const out = [...A.values()].filter(m => !B.has(m.c)).map(m => `<span class="neg">−${esc(m.u.n)}</span>`);
+    const inn = [...B.values()].filter(m => !A.has(m.c)).map(m => `<span class="pos">+${esc(m.u.n)}</span> <span class="muted">${DISTS[m.di].n} ${STYLES[m.si].n}</span>`);
+    const moved = [...B.values()].filter(m => A.has(m.c) && (A.get(m.c).di !== m.di || A.get(m.c).si !== m.si)).length;
+    return out.concat(inn).join(" ") + (moved ? ` <span class="muted">· ${moved} moved</span>` : "");
+  };
+  const alts = teams.map((x, i) => `<tr${i === UI.teamIdx ? ' class="sorted"' : ""}><td class="num">${i + 1}</td><td class="num gold">${f1(x.score)}</td>
+    <td class="num">${i ? (x.score - best.score).toFixed(1) : ""}</td><td class="num">${x.members.length}</td><td class="num">${x.sparks}</td>
+    <td>${i ? diff(best, x) : '<span class="muted">best</span>'}</td>
+    <td><button class="small" data-act="tview" data-i="${i}"${i === UI.teamIdx ? " disabled" : ""}>View</button></td></tr>`).join("");
+  $("teamOut").innerHTML = `<div class="calbox"><div class="calans">${f1(t.score)}</div>
+    <div class="calsub">Team <b>${UI.teamIdx + 1}</b> of ${teams.length}<span class="vbar">|</span><b>${t.members.length}</b>/15<span class="vbar">|</span>Sparks <b>${t.sparks}</b></div></div>
+    <div class="card scroll"><table class="dist"><thead><tr><th>Style</th><th>Trainee</th><th class="num">Stars</th><th class="apt"><span>Sf</span><span>Ds</span><span>St</span></th><th class="num">Sparks</th><th class="num">Score</th><th>Bench</th></tr></thead><tbody>${body}</tbody></table></div>
+    <div class="card scroll"><div class="head">Ranked</div><table><thead><tr><th class="num">#</th><th class="num">Score</th><th class="num">Δ</th><th class="num">Size</th><th class="num">Sparks</th><th>vs best</th><th></th></tr></thead><tbody>${alts}</tbody></table></div>`;
+}
+
+/* ---------------- Planner ---------------- */
+VIEWS.planner = () => {
+  view.innerHTML = `<div class="card"><label style="display:inline"><input type="checkbox" data-act="ponly"${root.plan.only ? " checked" : ""}>Targets only</label></div>
+    <div class="card scroll" id="pU"></div><div class="card scroll" id="pI"></div><div class="card scroll" id="pS"></div><div class="card" id="pH"></div>`;
+  drawPlanner();
+};
+function potCost(u, from, to) {
+  const tg = D.talent[u.tg] || [], need = {};
+  for (let lv = from + 1; lv <= to; lv++) for (const [id, n] of (tg[lv - 2] || [])) need[id] = (need[id] || 0) + n;
+  return need;
+}
+function drawPlanner() {
+  const only = root.plan.only;
+  // Trainees: stars and potential.
+  const items = {};
+  const urows = ownedUmas().sort((a, b) => a.n.localeCompare(b.n)).map(u => {
+    const o = root.umas[u.id], p = root.plan.umas[u.id] || {};
+    const ts = Math.max(o.s, p.s || o.s), tp = Math.max(o.p, p.p || o.p);
+    let shards = 0; for (let i = o.s + 1; i <= ts; i++) shards += STAR_SHARDS[i];
+    const need = potCost(u, o.p, tp);
+    for (const id in need) items[id] = (items[id] || 0) + need[id];
+    if (only && ts === o.s && tp === o.p) return "";
+    const so = []; for (let i = o.s; i <= 5; i++) so.push([i, i + "★"]);
+    const po = []; for (let i = o.p; i <= 5; i++) po.push([i, "P" + i]);
+    return `<tr><td>${uName(u)}</td><td class="num">${o.s}★</td><td><select class="mini" data-act="pus" data-id="${u.id}">${opts(so, ts)}</select></td>
+      <td class="num">${shards || ""}</td><td class="num">P${o.p}</td><td><select class="mini" data-act="pup" data-id="${u.id}">${opts(po, tp)}</select></td>
+      <td class="muted">${Object.keys(need).map(id => `${esc(D.items[id] || id)} <span class="gold mono">${need[id]}</span>`).join(" · ")}</td></tr>`;
+  }).join("");
+  $("pU").innerHTML = `<div class="head">Trainees</div><table><thead><tr><th>Trainee</th><th class="num">Stars</th><th>Target</th><th class="num">Shards</th><th class="num">Pot</th><th>Target</th><th>Items</th></tr></thead><tbody>${urows || `<tr><td colspan="7" class="muted">—</td></tr>`}</tbody></table>`;
+  // Items: shoes first, then sashes, then the rest.
+  const order = id => (+id <= 13 ? 0 : +id === 44 ? 2 : 1) * 1000 + +id;
+  const ik = Object.keys(items).sort((a, b) => order(a) - order(b));
+  $("pI").innerHTML = `<div class="head">Items</div><table><thead><tr><th>Item</th><th class="num">Need</th><th class="num">Have</th><th class="num">Short</th></tr></thead><tbody>
+    ${ik.map(id => { const have = root.plan.inv[id] || 0, sh = items[id] - have;
+      return `<tr><td>${esc(D.items[id] || id)}</td><td class="num">${fN(items[id])}</td><td class="num"><input class="mini" type="number" min="0" data-act="pinv" data-id="${id}" value="${have || ""}"></td><td class="num ${sh > 0 ? "neg" : "pos"}">${sh > 0 ? fN(sh) : "0"}</td></tr>`; }).join("") || `<tr><td colspan="4" class="muted">—</td></tr>`}</tbody></table>`;
+  // Supports: limit breaks and levels.
+  let totPts = 0, totCopies = 0;
+  const srows = ownedSups().sort((a, b) => b.r - a.r || a.n.localeCompare(b.n)).map(s => {
+    const o = own(s), p = root.plan.sups[s.id] || {};
+    const tl = Math.max(o.lb, p.lb == null ? o.lb : p.lb), lv = curLv(s), tlv = maxLv(s, tl);
+    const pts = Math.max(0, D.exp[s.r][tlv] - D.exp[s.r][lv]), copies = tl - o.lb;
+    totPts += pts; totCopies += copies;
+    if (only && !pts && !copies) return "";
+    const lo = []; for (let i = o.lb; i <= 4; i++) lo.push([i, "LB" + i]);
+    return `<tr><td><span class="ty">${RAR[s.r]} ${TYPE_LBL[s.ty]}</span></td><td>${sName(s)}</td><td class="num">LB${o.lb}</td>
+      <td class="num"><input class="mini" type="number" min="1" max="${maxLv(s, o.lb)}" data-act="plv" data-id="${s.id}" value="${lv}"></td>
+      <td><select class="mini" data-act="plb" data-id="${s.id}">${opts(lo, tl)}</select></td><td class="num">${tlv}</td>
+      <td class="num">${copies || ""}</td><td class="num gold">${pts ? fN(pts) : ""}</td></tr>`;
+  }).join("");
+  $("pS").innerHTML = `<div class="head">Support cards<span class="vbar">|</span>Pts <span class="gold mono">${fN(totPts)}</span><span class="vbar">|</span>Copies <span class="gold mono">${totCopies}</span></div>
+    <table><thead><tr><th>Type</th><th>Card</th><th class="num">LB</th><th class="num">Lv</th><th>Target</th><th class="num">Lv</th><th class="num">Copies</th><th class="num">Pts</th></tr></thead><tbody>${srows || `<tr><td colspan="8" class="muted">—</td></tr>`}</tbody></table>`;
+  drawHints();
+}
+function drawHints() {
+  // Hint finder: every card that teaches a skill by hint or event, owned first, with banner dates.
+  const src = new Map();
+  for (const s of SUPS) for (const id of s.h.concat(s.e)) src.set(id, 1);
+  const names = [...src.keys()].map(id => [id, skName(id)]).sort((a, b) => a[1].localeCompare(b[1]));
+  const blocks = root.plan.skills.map((id, i) => {
+    const cards = SUPS.filter(s => s.h.includes(id) || s.e.includes(id))
+      .filter(s => root.set.jp || s.en || s.b.length)
+      .map(s => ({s, o: own(s), via: s.h.includes(id) ? "Hint" : "Event", bn: banners(s.b)}))
+      .sort((a, b) => (!!b.o - !!a.o) || ((b.o || {}).lb || 0) - ((a.o || {}).lb || 0) || b.s.r - a.s.r);
+    return `<div style="margin-bottom:14px"><div class="row" style="align-items:center"><span class="${skGold(id) ? "gold" : ""}" style="font-weight:600">${esc(skName(id))}</span><button class="x" data-act="hx" data-i="${i}">×</button></div>
+      <div class="scroll"><table><thead><tr><th>Type</th><th>Card</th><th>Via</th><th class="num">Owned</th><th>Global</th><th>Last banner</th><th>Next banner</th></tr></thead><tbody>
+      ${cards.map(c => `<tr class="${c.o ? "" : "off"}"><td><span class="ty">${RAR[c.s.r]} ${TYPE_LBL[c.s.ty]}</span></td><td>${sName(c.s)}</td><td>${c.via}</td>
+        <td class="num">${c.o ? "LB" + c.o.lb : ""}</td><td class="mono">${c.s.en || "—"}</td><td class="mono">${c.bn.last}</td><td class="mono">${c.bn.next}</td></tr>`).join("")}</tbody></table></div></div>`;
+  }).join("");
+  $("pH").innerHTML = `<div class="head">Skill hints</div>${blocks}
+    <div class="row"><div style="width:320px"><input list="skl" id="hq" placeholder="Skill" value="${esc(UI.hq)}"></div><button class="small" data-act="hadd">Add</button></div>
+    <datalist id="skl">${names.map(([id, n]) => `<option value="${esc(n)}"></option>`).join("")}</datalist>`;
+}
+
+/* ---------------- Data ---------------- */
+VIEWS.data = () => {
+  const gU = UMAS.filter(u => u.en && u.en <= TODAY).length, gS = SUPS.filter(s => s.en && s.en <= TODAY).length;
+  view.innerHTML = `<div class="card"><div class="head">Server</div>
+    <label style="display:inline"><input type="checkbox" data-act="jp"${root.set.jp ? " checked" : ""}>Include JP-only</label>
+    <div class="hint">Global ${gU} trainees · ${gS} cards<span class="vbar">|</span>All ${UMAS.length} · ${SUPS.length}<span class="vbar">|</span>Data ${esc(D.built)}</div></div>
+    <div class="card"><div class="head">Quick add</div><div class="row">
+      <button class="small" data-act="qa" data-r="1">All R cards LB4</button>
+      <button class="small" data-act="qa" data-r="2">All SR cards LB4</button>
+      <button class="small" data-act="qu">All 1–2★ trainees</button></div></div>
+    <div class="card"><div class="head">Backup</div><div class="row">
+      <button data-act="exp">Export</button>
+      <button data-act="imp">Import</button><input type="file" id="impf" accept=".json,application/json" style="display:none">
+      <button class="danger" data-act="reset">Reset</button></div><div id="dmsg"></div></div>`;
+};
+
+/* ---------------- modal ---------------- */
+function modal(html) { $("modalcard").innerHTML = html; $("modal").classList.add("open"); }
+$("modal").addEventListener("click", e => { if (e.target.id === "modal") $("modal").classList.remove("open"); });
+document.addEventListener("keydown", e => { if (e.key === "Escape") $("modal").classList.remove("open"); });
+
+/* ---------------- events ---------------- */
+function redraw() { VIEWS[tab](); }
+function onClick(e) {
+  const th = e.target.closest("th[data-sort]");
+  if (th) {
+    const st = th.dataset.tab === "t" ? "tSort" : "sSort", k = th.dataset.sort;
+    UI[st] = UI[st][0] === k ? [k, -UI[st][1]] : [k, k === "name" || k === "type" ? 1 : -1];
+    th.dataset.tab === "t" ? drawTrainees() : drawSupports();
+    return;
+  }
+  const el = e.target.closest("[data-act]");
+  if (!el || el.tagName === "SELECT" || el.tagName === "INPUT") return;
+  const a = el.dataset.act, id = +el.dataset.id, i = +el.dataset.i;
+  const deck = root.decks[i];
+  switch (a) {
+    case "uinfo": uInfo(UBY[id]); break;
+    case "sinfo": sInfo(SBY[id]); break;
+    case "dnew": root.decks.push(normDeck({name: "Deck " + (root.decks.length + 1)})); save(); drawDecks(); break;
+    case "dauto": autoDeck(deck); save(); drawDecks(); break;
+    case "dclear": deck.cards = [null, null, null, null, null]; deck.friend = null; save(); drawDecks(); break;
+    case "dcopy": root.decks.splice(i + 1, 0, normDeck(JSON.parse(JSON.stringify({...deck, name: deck.name + " copy"})))); save(); drawDecks(); break;
+    case "ddel": if (confirm(`Delete ${deck.name}?`)) { root.decks.splice(i, 1); save(); drawDecks(); } break;
+    case "pinx": root.team.pins.splice(i, 1); save(); drawTeamCtl(); break;
+    case "exx": root.team.excl.splice(i, 1); save(); drawTeamCtl(); break;
+    case "build": UI.team = buildTeams(); UI.teamIdx = 0; drawTeamOut(); break;
+    case "tview": UI.teamIdx = i; drawTeamOut(); break;
+    case "hx": root.plan.skills.splice(i, 1); save(); drawHints(); break;
+    case "hadd": {
+      const n = $("hq").value.trim().toLowerCase();
+      const hit = Object.keys(D.skills).find(k => D.skills[k][0].toLowerCase() === n && SUPS.some(s => s.h.includes(+k) || s.e.includes(+k)));
+      if (hit && !root.plan.skills.includes(+hit)) root.plan.skills.push(+hit);
+      UI.hq = hit ? "" : $("hq").value;
+      save(); drawHints(); break;
+    }
+    case "qa": SUPS.forEach(s => { if (avail(s) && s.r === +el.dataset.r) root.sups[s.id] = {lb: 4}; }); save(); msg("Added."); break;
+    case "qu": UMAS.forEach(u => { if (avail(u) && u.r < 3 && !root.umas[u.id]) root.umas[u.id] = {s: u.r, p: 1}; }); save(); msg("Added."); break;
+    case "exp": {
+      const blob = new Blob([JSON.stringify(root, null, 1)], {type: "application/json"});
+      const link = document.createElement("a");
+      link.href = URL.createObjectURL(blob); link.download = `umacalc-${TODAY}.json`; link.click();
+      setTimeout(() => URL.revokeObjectURL(link.href), 1000); break;
+    }
+    case "imp": $("impf").click(); break;
+    case "reset": if (confirm("Erase all trainees, cards, decks and plans?")) { root = blank(); save(); msg("Reset."); } break;
+  }
+}
+function msg(t, bad) { const m = $("dmsg"); if (m) m.innerHTML = `<div class="${bad ? "err" : "okmsg"}">${esc(t)}</div>`; }
+function onChange(e) {
+  const el = e.target, a = el.dataset.act, id = el.dataset.id, i = +el.dataset.i, v = el.value;
+  if (el.id === "impf") {
+    const f = el.files[0]; if (!f) return;
+    f.text().then(t => {
+      try {
+        const r = normalize(JSON.parse(t));
+        if (!confirm("Replace current data with this backup?")) return;
+        root = r; save(); msg(`Imported ${Object.keys(root.umas).length} trainees, ${Object.keys(root.sups).length} cards, ${root.decks.length} decks.`);
+      } catch (err) { msg("Not a Umacalc backup: " + err.message, true); }
+    });
+    return;
+  }
+  if (["tOwn", "tDist", "tSty"].includes(el.id)) { UI[el.id] = v; drawTrainees(); return; }
+  if (["sType", "sRar", "sOwn"].includes(el.id)) { UI[el.id] = v; drawSupports(); return; }
+  const deck = root.decks[i];
+  switch (a) {
+    case "ustar":
+      if (+v) root.umas[id] = {s: +v, p: (root.umas[id] || {}).p || 1}; else delete root.umas[id];
+      save(); drawTrainees(); break;
+    case "upot": if (root.umas[id]) root.umas[id].p = +v; save(); break;
+    case "slb":
+      if (v === "") delete root.sups[id]; else root.sups[id] = {lb: +v};
+      save(); drawSupports(); break;
+    case "dcard": deck.cards[+el.dataset.j] = v ? +v : null; save(); drawDecks(); break;
+    case "dfr": deck.friend = v ? +v : null; save(); drawDecks(); break;
+    case "dflb": deck.flb = +v; save(); drawDecks(); break;
+    case "dtr": deck.tr = v ? +v : null; save(); drawDecks(); break;
+    case "dq": deck.q[el.dataset.t] = Math.max(0, Math.min(5, +v || 0)); save(); break;
+    case "pinadd": if (v && !root.team.pins.some(p => UBY[p.id].c === UBY[v].c)) root.team.pins.push({id: +v, d: null, s: null}); save(); drawTeamCtl(); break;
+    case "exadd": if (v && !root.team.excl.includes(+v)) root.team.excl.push(+v); save(); drawTeamCtl(); break;
+    case "pind": root.team.pins[i].d = v === "" ? null : +v; save(); break;
+    case "pins": root.team.pins[i].s = v === "" ? null : +v; save(); break;
+    case "ming": root.team.minG = v; save(); break;
+    case "alts": root.team.alts = Math.max(0, Math.min(30, +v || 0)); save(); break;
+    case "ponly": root.plan.only = el.checked; save(); drawPlanner(); break;
+    case "pus": root.plan.umas[id] = {...(root.plan.umas[id] || {}), s: +v}; save(); drawPlanner(); break;
+    case "pup": root.plan.umas[id] = {...(root.plan.umas[id] || {}), p: +v}; save(); drawPlanner(); break;
+    case "plb": root.plan.sups[id] = {lb: +v}; save(); drawPlanner(); break;
+    case "plv": {
+      const s = SBY[id], cap = maxLv(s, own(s).lb);
+      root.sups[id].lv = Math.max(1, Math.min(cap, Math.round(+v) || cap));
+      if (root.sups[id].lv === cap) delete root.sups[id].lv;
+      save(); drawPlanner(); break;
+    }
+    case "pinv": root.plan.inv[id] = Math.max(0, +v || 0); save(); drawPlanner(); break;
+    case "jp": root.set.jp = el.checked; UI.team = null; save(); redraw(); break;
+  }
+}
+function onInput(e) {
+  const el = e.target;
+  if (el.id === "tq") { UI.tq = el.value; drawTrainees(); }
+  else if (el.id === "sq") { UI.sq = el.value; drawSupports(); }
+  else if (el.dataset.act === "dname") { root.decks[+el.dataset.i].name = el.value; save(); }
+}
+view.addEventListener("click", onClick);
+view.addEventListener("change", onChange);
+view.addEventListener("input", onInput);
+$("modalcard").addEventListener("click", onClick);
+window.addEventListener("hashchange", go);
+
+$("foot").innerHTML = `Umacalc ${VERSION}<span class="vbar">|</span>Data ${esc(D.built)} from <a href="https://gametora.com/umamusume" target="_blank" rel="noopener">GameTora</a>`;
+drawBanner();
+go();
+</script>
+</body>
+</html>

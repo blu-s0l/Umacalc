@@ -123,6 +123,8 @@ select:disabled:hover{border-color:var(--line2)}
 .mtitle{font-size:21px;font-weight:700;letter-spacing:-.01em;line-height:1.2}
 .msub{font-size:14px;color:var(--sub);margin-bottom:12px}
 .kv{font-size:13px;color:var(--tx);margin-top:4px}
+.mhead{display:flex;justify-content:space-between;align-items:flex-start;gap:12px}
+.mpic{width:96px;height:96px;flex:none;margin:-6px -4px 0 0;border-radius:10px;background:var(--panel2);border:1px solid var(--line)}
 table.cmp th,table.cmp td{padding-left:6px;padding-right:6px}
 table.cmp .gs{padding-left:16px}
 /* target toggle: an empty ring, filled blue when on */
@@ -490,8 +492,9 @@ function uInfo(u) {
        ${u.jp ? `<div class="kv">Est. Global release <span class="gold">${estGlobal(u.jp)}</span></div>` : ""}`
     : `<div class="kv" style="margin-top:14px">Global release <span class="gold">${u.en}</span></div>
        ${u.b.some(b => !b[1]) ? `<div class="kv">Banners ${dates(u.b.filter(b => !b[1]).map(b => b[0]))}</div>` : ""}`;
-  modal(`<div class="mtitle">${esc(u.n)}</div><div class="msub">${esc(u.t)}</div>
-    <div class="kv" style="margin:-6px 0 12px">Unique <span class="gold">${esc(u.u ? skName(u.u) : "—")}</span></div>
+  modal(`<div class="mhead"><div><div class="mtitle">${esc(u.n)}</div><div class="msub">${esc(u.t)}</div>
+    <div class="kv" style="margin:-6px 0 12px">Unique <span class="gold">${esc(u.u ? skName(u.u) : "—")}</span></div></div>
+    <img class="mpic" src="img/umas/${u.id}.png" alt="" width="96" height="96" onerror="this.remove()"></div>
     <div class="scroll"><table><thead><tr><th>Stars</th>${STAT.map(s => `<th class="num">${s}</th>`).join("")}<th class="num">Total</th></tr></thead><tbody>${rows}</tbody></table></div>
     <div class="row fill" style="gap:20px;margin-top:12px;align-items:flex-start;flex-wrap:nowrap">
       <div class="scroll" style="flex-grow:2"><table class="cmp"><thead><tr>${APT_FULL.map((n, i) => `<th class="ctr${grpStart(i)}">${n}</th>`).join("")}</tr></thead>
@@ -1049,7 +1052,7 @@ document.addEventListener("click", e => {
 $("modalcard").addEventListener("click", onClick);
 window.addEventListener("hashchange", go);
 
-$("foot").innerHTML = `Umacalc ${VERSION}<span class="vbar">|</span>Data ${esc(D.built)} from <a href="https://gametora.com/umamusume" target="_blank" rel="noopener">GameTora</a>`;
+$("foot").innerHTML = `Umacalc ${VERSION}<span class="vbar">|</span>Data and images ${esc(D.built)} from <a href="https://gametora.com/umamusume" target="_blank" rel="noopener">GameTora</a><span class="vbar">|</span>Umamusume: Pretty Derby © Cygames, Inc. Unofficial fan tool.`;
 drawBanner();
 go();
 </script>

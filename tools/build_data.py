@@ -125,6 +125,35 @@ def main(dl):
     with open(dest, "w", encoding="utf-8") as fh:
         fh.write(js)
     print(f"data.js: {len(umas)} trainees, {len(sups)} supports, {len(skills)} skills, {len(js)//1024} KB")
+    fetch_portraits(umas)
+
+
+# 128px outfit portraits, one per trainee card, kept in img/umas/<card_id>.png.
+# Existing files are skipped, so a refresh only fetches new releases.
+IMG = BASE.replace("/data", "/images") + "/umamusume/characters/thumb/chara_stand_{c}_{id}.png"
+PNG_MAGIC = b"\x89PNG\r\n\x1a\n"
+
+
+def fetch_portraits(umas):
+    dest = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "img", "umas")
+    os.makedirs(dest, exist_ok=True)
+    got = missing = 0
+    for u in umas:
+        path = os.path.join(dest, f"{u['id']}.png")
+        if os.path.exists(path):
+            continue
+        try:
+            body = get(IMG.format(c=u["c"], id=u["id"]))
+        except Exception:
+            missing += 1
+            continue
+        if not body.startswith(PNG_MAGIC):   # an HTML error page, not an image
+            missing += 1
+            continue
+        with open(path, "wb") as fh:
+            fh.write(body)
+        got += 1
+    print(f"portraits: {got} fetched, {missing} unavailable")
 
 
 if __name__ == "__main__":

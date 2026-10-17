@@ -48,6 +48,12 @@ Umamusume: Pretty Derby (Global). One `index.html` in the house style from
 - The friend slot draws from every available SSR, friend and group card at a chosen LB.
 - Duplicate characters in a deck, including the trainee, are flagged, not blocked.
 
+- **Trainee portraits are copied into `img/umas/<card_id>.png`.** They are GameTora's 128px
+  thumbnails, about 6 KB each and about 1.7 MB in all, and the build script fetches only new ones.
+  They are self-hosted rather than hotlinked so the app doesn't use GameTora's bandwidth or break
+  when its paths change. The art is Cygames'; the footer credits both. If a takedown ever comes,
+  delete `img/` and the panel drops the picture (`onerror` removes it).
+
 ## Ruled out
 
-- Images from GameTora: an external dependency and a hotlinking concern. The app uses names only.
+- Hotlinking images from GameTora: it uses their bandwidth and makes the app depend on their paths.

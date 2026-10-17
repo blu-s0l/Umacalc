@@ -170,8 +170,7 @@ td.apt,th.apt{padding-left:4px;padding-right:4px;white-space:nowrap}
 .pinrow .nm{min-width:180px}
 .pinrow select{width:auto}
 .split{display:grid;grid-template-columns:1fr 1fr;gap:14px}
-.split3{display:grid;grid-template-columns:1.3fr 1fr 1fr;gap:18px}
-.split3 select{max-width:340px}
+.split3{display:grid;grid-template-columns:repeat(3,minmax(0,340px));justify-content:start;gap:18px}
 @media(max-width:900px){.split3{grid-template-columns:1fr}}
 footer{margin-top:24px}
 @media(max-width:900px){.slots{grid-template-columns:repeat(3,minmax(0,1fr))}}

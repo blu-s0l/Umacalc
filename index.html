@@ -170,6 +170,11 @@ td.apt,th.apt{padding-left:4px;padding-right:4px;white-space:nowrap}
 .pinrow .nm{min-width:180px}
 .pinrow select{width:auto}
 .split{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+/* collapsible planner sections: the card header is the toggle; collapsed drops only its trailing margin */
+details.sect{border-top:0;padding:0;margin:0}
+details.sect>summary.head{font-size:10.5px;color:var(--sub);font-weight:700;margin-bottom:10px}
+details.sect>summary.head:hover{color:var(--tx)}
+details.sect:not([open])>summary.head{margin-bottom:0}
 .igrid{grid-template-columns:repeat(auto-fill,minmax(150px,1fr))}
 .igrid label{text-transform:none;letter-spacing:0;font-size:11.5px;font-weight:600;color:var(--sub);
              white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -274,7 +279,7 @@ const EFF_PCT = new Set([1,2,8,15,16,18,25,26,27,28]);
 function blank() {
   return {schema: SCHEMA, umas: {}, tgt: {}, sups: {}, decks: [], inv: {on: {}, shards: {}},
           team: {pins: [], prefs: [], excl: [], minG: "B", alts: 8},
-          plan: {umas: {}, sups: {}, inv: {}, skills: [], only: false},
+          plan: {umas: {}, sups: {}, inv: {}, skills: [], only: false, open: {}},
           set: {jp: false}};
 }
 function normDeck(d) {
@@ -962,9 +967,12 @@ function invTrainees() {
 /* ---------------- Planner ---------------- */
 VIEWS.planner = () => {
   view.innerHTML = `<div class="card"><label style="display:inline"><input type="checkbox" data-act="ponly"${root.plan.only ? " checked" : ""}>Targets only</label></div>
-    <div class="card scroll" id="pU"></div><div class="card scroll" id="pI"></div><div class="card scroll" id="pS"></div><div class="card" id="pH"></div>`;
+    <div class="card scroll" id="pU"></div><div class="card scroll" id="pK"></div><div class="card scroll" id="pI"></div><div class="card scroll" id="pS"></div><div class="card" id="pH"></div>`;
   drawPlanner();
 };
+// A collapsible planner section; open unless the user closed it (root.plan.open).
+const sect = (key, head, body) =>
+  `<details class="sect" data-sec="${key}"${root.plan.open[key] === false ? "" : " open"}><summary class="head">${head}</summary>${body}</details>`;
 // Owned trainee's potential skills with editable hint levels. A skill whose potential
 // level isn't reached yet is locked, as in the game.
 function hintTable(u, o) {
@@ -1002,12 +1010,30 @@ function drawPlanner() {
       <td class="num">${shards || ""}</td><td class="num">P${o.p}</td><td><select class="mini" data-act="pup" data-id="${u.id}">${opts(po, tp)}</select></td>
       <td class="muted">${Object.keys(need).map(id => `${esc(D.items[id] || id)} <span class="gold mono">${need[id]}</span>`).join(" · ")}</td></tr>`;
   }).join("");
-  $("pU").innerHTML = `<div class="head">Trainees</div><table><thead><tr><th>Trainee</th><th class="num">Stars</th><th>Target</th><th class="num">Shards</th><th class="num">Pot</th><th>Target</th><th>Items</th></tr></thead><tbody>${urows || `<tr><td colspan="7" class="muted">—</td></tr>`}</tbody></table>`;
+  $("pU").innerHTML = sect("pU", "Trainees", `<table><thead><tr><th>Trainee</th><th class="num">Stars</th><th>Target</th><th class="num">Shards</th><th class="num">Pot</th><th>Target</th><th>Items</th></tr></thead><tbody>${urows || `<tr><td colspan="7" class="muted">—</td></tr>`}</tbody></table>`);
+  // Skill hints: a target per potential skill. A skill can only be targeted once the
+  // target potential level unlocks it.
+  const krows = ownedUmas().filter(u => u.aw.length).sort((a, b) => a.n.localeCompare(b.n)).map(u => {
+    const o = root.umas[u.id], p = root.plan.umas[u.id] || {}, cur = o.h || [], tgt = p.h || [];
+    const tp = Math.max(o.p, p.p || o.p), need = {};
+    let any = false;
+    const cells = u.aw.map((sk, k) => {
+      const c = cur[k] || 0, unlocked = tp >= k + 2, t = unlocked ? Math.max(c, tgt[k] || 0) : c;
+      if (t > c) { any = true; hintCost(sk, c, t, need); }
+      const lo = []; for (let i = c; i <= HINT_MAX; i++) lo.push([i, "Lv" + i]);
+      return `<td><div class="ttl ${skGold(sk) ? "gold" : ""}" style="white-space:nowrap">${esc(skName(sk))}</div>
+        <select class="mini" data-act="puh" data-id="${u.id}" data-k="${k}"${unlocked ? "" : " disabled"}>${opts(lo, t)}</select></td>`;
+    }).join("");
+    for (const id in need) items[id] = (items[id] || 0) + need[id];
+    if (only && !any) return "";
+    return `<tr><td>${uName(u)}</td>${cells}<td class="muted">${Object.keys(need).sort((a, b) => a - b).map(id => `${esc(D.items[id] || id)} <span class="gold mono">${need[id]}</span>`).join(" · ")}</td></tr>`;
+  }).join("");
+  $("pK").innerHTML = sect("pK", "Skill hints", `<table><thead><tr><th>Trainee</th><th>P2</th><th>P3</th><th>P4</th><th>P5</th><th>Items</th></tr></thead><tbody>${krows || `<tr><td colspan="6" class="muted">—</td></tr>`}</tbody></table>`);
   // Items: shoes first, then sashes, then the rest.
   const ik = Object.keys(items).sort((a, b) => itemOrder(a) - itemOrder(b));
-  $("pI").innerHTML = `<div class="head">Items</div><table><thead><tr><th>Item</th><th class="num">Need</th><th class="num">Have</th><th class="num">Short</th></tr></thead><tbody>
+  $("pI").innerHTML = sect("pI", "Items", `<table><thead><tr><th>Item</th><th class="num">Need</th><th class="num">Have</th><th class="num">Short</th></tr></thead><tbody>
     ${ik.map(id => { const have = root.plan.inv[id] || 0, sh = items[id] - have;
-      return `<tr><td>${esc(D.items[id] || id)}</td><td class="num">${fN(items[id])}</td><td class="num"><input class="mini" type="number" min="0" data-act="pinv" data-id="${id}" value="${have || ""}"></td><td class="num ${sh > 0 ? "neg" : "pos"}">${sh > 0 ? fN(sh) : "0"}</td></tr>`; }).join("") || `<tr><td colspan="4" class="muted">—</td></tr>`}</tbody></table>`;
+      return `<tr><td>${esc(D.items[id] || id)}</td><td class="num">${fN(items[id])}</td><td class="num"><input class="mini" type="number" min="0" data-act="pinv" data-id="${id}" value="${have || ""}"></td><td class="num ${sh > 0 ? "neg" : "pos"}">${sh > 0 ? fN(sh) : "0"}</td></tr>`; }).join("") || `<tr><td colspan="4" class="muted">—</td></tr>`}</tbody></table>`);
   // Supports: limit breaks and levels.
   let totPts = 0, totCopies = 0;
   const srows = ownedSups().sort((a, b) => b.r - a.r || a.n.localeCompare(b.n)).map(s => {
@@ -1022,8 +1048,8 @@ function drawPlanner() {
       <td><select class="mini" data-act="plb" data-id="${s.id}">${opts(lo, tl)}</select></td><td class="num">${tlv}</td>
       <td class="num">${copies || ""}</td><td class="num gold">${pts ? fN(pts) : ""}</td></tr>`;
   }).join("");
-  $("pS").innerHTML = `<div class="head">Support cards<span class="vbar">|</span>Pts <span class="gold mono">${fN(totPts)}</span><span class="vbar">|</span>Copies <span class="gold mono">${totCopies}</span></div>
-    <table><thead><tr><th>Type</th><th>Card</th><th class="num">LB</th><th class="num">Lv</th><th>Target</th><th class="num">Lv</th><th class="num">Copies</th><th class="num">Pts</th></tr></thead><tbody>${srows || `<tr><td colspan="8" class="muted">—</td></tr>`}</tbody></table>`;
+  $("pS").innerHTML = sect("pS", `Support cards<span class="vbar">|</span>Pts <span class="gold mono">${fN(totPts)}</span><span class="vbar">|</span>Copies <span class="gold mono">${totCopies}</span>`,
+    `<table><thead><tr><th>Type</th><th>Card</th><th class="num">LB</th><th class="num">Lv</th><th>Target</th><th class="num">Lv</th><th class="num">Copies</th><th class="num">Pts</th></tr></thead><tbody>${srows || `<tr><td colspan="8" class="muted">—</td></tr>`}</tbody></table>`);
   drawHints();
 }
 function drawHints() {
@@ -1041,9 +1067,10 @@ function drawHints() {
       ${cards.map(c => `<tr class="${c.o ? "" : "off"}"><td><span class="ty">${RAR[c.s.r]} ${TYPE_LBL[c.s.ty]}</span></td><td>${sName(c.s)}</td><td>${c.via}</td>
         <td class="num">${c.o ? "LB" + c.o.lb : ""}</td><td class="mono">${c.s.en || "—"}</td><td class="mono">${c.bn.last}</td><td class="mono">${c.bn.next}</td></tr>`).join("")}</tbody></table></div></div>`;
   }).join("");
-  $("pH").innerHTML = `<div class="head">Skill hints</div>${blocks}
+  // Renamed from "Skill hints" now that the hint-level targets have that name.
+  $("pH").innerHTML = sect("pH", "Hint sources", `${blocks}
     <div class="row"><div style="width:320px"><input list="skl" id="hq" placeholder="Skill" value="${esc(UI.hq)}"></div><button class="small" data-act="hadd">Add</button></div>
-    <datalist id="skl">${names.map(([id, n]) => `<option value="${esc(n)}"></option>`).join("")}</datalist>`;
+    <datalist id="skl">${names.map(([id, n]) => `<option value="${esc(n)}"></option>`).join("")}</datalist>`);
 }
 
 /* ---------------- Data ---------------- */
@@ -1186,6 +1213,11 @@ function onChange(e) {
     case "ponly": root.plan.only = el.checked; save(); drawPlanner(); break;
     case "pus": root.plan.umas[id] = {...(root.plan.umas[id] || {}), s: +v}; save(); drawPlanner(); break;
     case "pup": root.plan.umas[id] = {...(root.plan.umas[id] || {}), p: +v}; save(); drawPlanner(); break;
+    case "puh": {
+      const t = root.plan.umas[id] = {...(root.plan.umas[id] || {})};
+      t.h = (t.h || []).slice(0, 4); while (t.h.length < 4) t.h.push(0);
+      t.h[+el.dataset.k] = +v; save(); drawPlanner(); break;
+    }
     case "plb": root.plan.sups[id] = {lb: +v}; save(); drawPlanner(); break;
     case "plv": {
       const s = SBY[id], cap = maxLv(s, own(s).lb);
@@ -1215,6 +1247,8 @@ view.addEventListener("change", onChange);
 view.addEventListener("input", onInput);
 // <details> toggle doesn't bubble; catch it on the way down to remember which filter groups are open.
 view.addEventListener("toggle", e => { const k = e.target.dataset && e.target.dataset.k; if (k && UI.tf[k]) UI.tf[k].open = e.target.open; }, true);
+// Remember which planner sections are collapsed.
+view.addEventListener("toggle", e => { const k = e.target.dataset && e.target.dataset.sec; if (k) { root.plan.open[k] = e.target.open; save(); } }, true);
 // Filter drop-downs close on a click anywhere else, like a select would.
 document.addEventListener("click", e => {
   document.querySelectorAll("details.fgrp[open]").forEach(d => { if (!d.contains(e.target)) d.open = false; });

@@ -173,21 +173,22 @@ td.apt,th.apt{padding-left:4px;padding-right:4px;white-space:nowrap}
 /* planner trainee rows: targets on line 1, hint targets on line 2, items spanning both */
 table.ptab tr.pu1 td{border-bottom:0;padding-bottom:2px}
 table.ptab tr.pu2 td{padding-top:2px;padding-bottom:10px}
-table.ptab .pitems{vertical-align:top;min-width:340px;padding-top:4px}
+table.ptab .pitems{vertical-align:top;width:290px;min-width:290px;max-width:290px;padding-top:4px}
 table.ptab th.pitems{vertical-align:bottom;padding-bottom:0}
 table.ptab th.grp{text-align:center;border-bottom:1px solid var(--line)}
 table.sub{width:100%;table-layout:fixed;font-size:12px}
-table.sub td,table.sub th{border:0;padding:1px 0 1px 8px;line-height:1.5}
+table.sub td,table.sub th{border:0;padding:1px 0 1px 4px;line-height:1.5}
+table.sub th{letter-spacing:.04em}
 table.sub td:first-child,table.sub th:first-child{padding-left:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 table.sub th{padding-bottom:6px}
 /* the hint cells are fixed width so the trainee column can end exactly where the third begins */
-.hrow{display:flex;flex-wrap:wrap;gap:6px 12px}
-.hcell{display:flex;flex-direction:column;gap:2px;width:136px}
+.hrow{display:flex;flex-wrap:wrap;gap:6px 10px}
+.hcell{display:flex;flex-direction:column;gap:2px;width:112px}
 .hcell.off{opacity:.45}
 .hcell .ttl{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .hcell select{align-self:flex-start}
-/* 2 × (136 + 12) = 296: the Stars column starts where the third hint cell does (border-box width) */
-table.ptab td.pname{width:296px;min-width:296px;max-width:296px}
+/* 2 × (112 + 10) = 244: the Stars column starts where the third hint cell does (border-box width) */
+table.ptab td.pname{width:244px;min-width:244px;max-width:244px}
 /* collapsible planner sections: the card header is the toggle; collapsed drops only its trailing margin */
 details.sect{border-top:0;padding:0;margin:0}
 details.sect>summary.head{font-size:10.5px;color:var(--sub);font-weight:700;margin-bottom:10px}
@@ -1020,7 +1021,9 @@ function potCost(u, from, to) {
   return need;
 }
 // The per-trainee items table and its header are separate tables; fixed number columns keep them aligned.
-const PSUB_COLS = `<colgroup><col><col style="width:58px"><col style="width:58px"><col style="width:58px"></colgroup>`;
+// Short item names for the narrow per-trainee items table; the full name is the tooltip.
+const itemShort = id => (D.items[id] || String(id)).replace(/ Racing Shoes$/, " Shoes").replace(/ Winner's Sash$/, " Sash");
+const PSUB_COLS =`<colgroup><col><col style="width:44px"><col style="width:44px"><col style="width:44px"></colgroup>`;
 function drawPlanner() {
   const only = root.plan.only;
   // Trainees: stars and potential on the first line, hint-level targets on the second,
@@ -1048,7 +1051,7 @@ function drawPlanner() {
     const n = v => v ? fN(v) : "";
     const il = Object.keys(need).sort((a, b) => itemOrder(a) - itemOrder(b)).map(id => {
       const have = invHave(id);
-      return `<tr><td>${esc(D.items[id] || id)}</td><td class="num">${n(need[id])}</td><td class="num">${n(have)}</td><td class="num gold">${n(Math.max(0, need[id] - have))}</td></tr>`;
+      return `<tr><td title="${esc(D.items[id] || id)}">${esc(itemShort(id))}</td><td class="num">${n(need[id])}</td><td class="num">${n(have)}</td><td class="num gold">${n(Math.max(0, need[id] - have))}</td></tr>`;
     }).join("");
     const sHave = root.inv.shards[u.id] || 0;
     return `<tr class="pu1"><td class="pname">${uName(u)}</td><td>${o.s}★</td><td><select class="mini" data-act="pus" data-id="${u.id}">${opts(so, ts)}</select></td>

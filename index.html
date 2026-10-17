@@ -107,10 +107,23 @@ nav a.end{margin-left:auto}
 .gl{color:var(--mut)}
 .gz{color:var(--mut)}
 .tfrow{display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end}
-details.fgrp{border:1px solid var(--line2);border-radius:8px;background:var(--panel2);padding:6px 10px;margin:0;min-width:120px}
-details.fgrp summary{font-size:12.5px;color:var(--sub)}
-details.fgrp[open]{padding-bottom:8px}
-.fbody{display:flex;flex-wrap:wrap;gap:4px 12px;margin-top:6px;align-items:center}
+/* filter groups: the summary is the button, the body drops down over the page instead of growing the row */
+details.fgrp{position:relative;border:1px solid var(--line2);border-radius:8px;background:var(--panel2);padding:0;margin:0;min-width:140px}
+details.fgrp summary{font-size:12.5px;color:var(--sub);padding:7px 10px;border-radius:8px}
+details.fgrp:hover{border-color:var(--blue)}
+details.fgrp:hover summary{color:var(--tx)}
+details.fgrp[open]{border-color:rgba(77,159,255,.5);background:var(--bluebg)}
+details.fgrp[open] summary{color:var(--blue)}
+.fpop{position:absolute;top:calc(100% + 4px);left:-1px;z-index:30;min-width:calc(100% + 2px);background:var(--panel2);
+      border:1px solid rgba(77,159,255,.5);border-radius:8px;padding:4px 10px 10px;box-shadow:0 8px 24px rgba(0,0,0,.45);white-space:nowrap}
+.fbody{display:flex;gap:4px 12px;margin-top:6px;align-items:center}
+select:hover{border-color:var(--blue)}
+select:disabled:hover{border-color:var(--line2)}
+.ctr{text-align:center}
+.mtitle{font-size:21px;font-weight:700;letter-spacing:-.01em;line-height:1.2}
+.msub{font-size:14px;color:var(--sub);margin-bottom:12px}
+table.pot th.pl{text-align:center;border-bottom:1px solid var(--line)}
+table.pot td:nth-child(even),table.pot th.pl,table.pot tr:last-child th:nth-child(odd){padding-left:16px}
 label.ck{display:inline-flex;align-items:center;text-transform:none;letter-spacing:0;font-size:12.5px;font-weight:500;color:var(--tx);margin:0;cursor:pointer}
 nav a{padding:6px 12px;border-radius:8px;color:var(--sub);text-decoration:none;font-size:13px;font-weight:600;border:1px solid transparent}
 nav a:hover{color:var(--tx);border-color:var(--line2)}
@@ -120,10 +133,10 @@ input.mini{width:62px}
 .nm{color:var(--tx);cursor:pointer;font-weight:600;text-decoration:none}
 .nm:hover{color:var(--blue)}
 .ttl{font-size:11px;color:var(--mut)}
-.g{display:inline-block;width:1.45em;text-align:center;font-family:var(--mono);font-weight:700}
+.g{display:inline-block;width:18px;text-align:center;font-family:var(--mono);font-weight:700}
 .gS{color:var(--gold)} .gA{color:var(--tx)} .gB{color:var(--sub);font-weight:600} .gC{color:var(--mut);font-weight:500}
 .gD,.gE,.gF,.gG{color:#465062;font-weight:400}
-th.apt span{display:inline-block;width:1.45em;text-align:center;letter-spacing:0}
+th.apt span{display:inline-block;width:18px;text-align:center;letter-spacing:0}
 td.apt,th.apt{padding-left:4px;padding-right:4px;white-space:nowrap}
 .ty{font-family:var(--mono);font-size:11px;color:var(--sub);text-transform:uppercase}
 .gold{color:var(--gold)}
@@ -217,7 +230,7 @@ const EFF_PCT = new Set([1,2,8,15,16,18,25,26,27,28]);
 
 /* ---------------- state ---------------- */
 function blank() {
-  return {schema: SCHEMA, umas: {}, sups: {}, decks: [],
+  return {schema: SCHEMA, umas: {}, tgt: {}, sups: {}, decks: [],
           team: {pins: [], excl: [], minG: "B", alts: 8},
           plan: {umas: {}, sups: {}, inv: {}, skills: [], only: false},
           set: {jp: false}};
@@ -286,6 +299,8 @@ const aptTd = (u, a, b) => `<td class="apt">${[...u.a.slice(a, b)].map(gr).join(
 const APT_TH = `<th class="apt"><span>Tf</span><span>Dt</span></th><th class="apt"><span>Sp</span><span>Mi</span><span>Md</span><span>Lg</span></th><th class="apt"><span>Fr</span><span>Pc</span><span>Lt</span><span>En</span></th>`;
 const GROW = ["Sp", "St", "Po", "Gu", "Wi"];
 const growth = u => `<span class="grow">${u.g.map((v, i) => `<span><span class="gl">${GROW[i]}</span>${v ? `<span class="gold">${v}</span>` : `<span class="gz">–</span>`}</span>`).join("")}</span>`;
+// Potential items: shoes first, then sashes, then Dream Glimmer.
+const itemOrder = id => (+id <= 13 ? 0 : +id === 44 ? 2 : 1) * 1000 + +id;
 const uName = u => `<a class="nm" data-act="uinfo" data-id="${u.id}">${esc(u.n)}</a><div class="ttl">${esc(u.t)}</div>`;
 
 /* ---------------- support helpers ---------------- */
@@ -332,7 +347,7 @@ function banners(b) {
 }
 
 /* ---------------- nav / shell ---------------- */
-const TABS = [["trainees","Trainees"],["supports","Supports"],["decks","Decks"],["teams","Teams"],["planner","Planner"],["data","Data"]];
+const TABS = [["trainees","Trainees"],["supports","Supports"],["decks","Decks"],["teams","Teams"],["aces","Aces"],["parents","Parents"],["planner","Planner"],["data","Data"]];
 const VIEWS = {};
 let tab = "trainees";
 function go() {
@@ -349,30 +364,34 @@ const view = $("view");
 
 /* ---------------- Trainees ---------------- */
 // Aptitude filter groups: indices into the aptitude string.
+// Surface has no All/Any switch: a trainee good on both turf and dirt is rare enough that
+// checking both means "both".
 const TF = [
-  {k: "surf", n: "Surface",  items: [["Turf", 0], ["Dirt", 1]]},
-  {k: "dist", n: "Distance", items: [["Sprint", 2], ["Mile", 3], ["Medium", 4], ["Long", 5]]},
-  {k: "sty",  n: "Style",    items: [["Front", 6], ["Pace", 7], ["Late", 8], ["End", 9]]},
+  {k: "surf", n: "Surface",  any: false, items: [["Turf", 0], ["Dirt", 1]]},
+  {k: "dist", n: "Distance", any: true,  items: [["Sprint", 2], ["Mile", 3], ["Medium", 4], ["Long", 5]]},
+  {k: "sty",  n: "Style",    any: true,  items: [["Front", 6], ["Pace", 7], ["Late", 8], ["End", 9]]},
 ];
+// No trainee has a natural S, so the threshold starts at A.
+const TF_GRADES = [..."ABCDEFG"].map(x => [x, x + "+"]);
 const tfSum = g => {
   const f = UI.tf[g.k];
   if (!f.on.length) return "";
-  return g.items.filter(([, i]) => f.on.includes(i)).map(([n]) => n).join(f.any ? " / " : " + ") + " " + f.g + (f.g === "S" ? "" : "+");
+  return g.items.filter(([, i]) => f.on.includes(i)).map(([n]) => n).join(f.any ? " / " : " + ") + " " + f.g + "+";
 };
 VIEWS.trainees = () => {
   const grp = g => {
     const f = UI.tf[g.k];
     return `<details class="fgrp" data-k="${g.k}"${f.open ? " open" : ""}><summary>${g.n} <span class="gold" id="tfs-${g.k}">${esc(tfSum(g))}</span></summary>
-      <div class="fbody">${g.items.map(([n, i]) => `<label class="ck"><input type="checkbox" data-tf="${g.k}" data-i="${i}"${f.on.includes(i) ? " checked" : ""}>${n}</label>`).join("")}</div>
-      <div class="fbody"><select class="mini" data-tfg="${g.k}">${opts([...GRADES].map(x => [x, x === "S" ? "S" : x + "+"]), f.g)}</select>
-        ${g.items.length > 1 ? `<select class="mini" data-tfa="${g.k}">${opts([["0", "All"], ["1", "Any"]], f.any ? 1 : 0)}</select>` : ""}</div>
+      <div class="fpop"><div class="fbody">${g.items.map(([n, i]) => `<label class="ck"><input type="checkbox" data-tf="${g.k}" data-i="${i}"${f.on.includes(i) ? " checked" : ""}>${n}</label>`).join("")}</div>
+      <div class="fbody"><select class="mini" data-tfg="${g.k}">${opts(TF_GRADES, f.g)}</select>
+        ${g.any ? `<select class="mini" data-tfa="${g.k}">${opts([["0", "All"], ["1", "Any"]], f.any ? 1 : 0)}</select>` : ""}</div></div>
     </details>`;
   };
   view.innerHTML = `<div class="card"><div class="tfrow">
     <div style="width:220px"><label>Search</label><input id="tq" value="${esc(UI.tq)}" placeholder="Name or title"></div>
-    <div style="width:130px"><label>Show</label><select id="tOwn">${opts([["all","All"],["own","Owned"],["not","Not owned"]], UI.tOwn)}</select></div>
-    ${TF.map(grp).join("")}
-  </div><div class="hint" id="tCount"></div></div>
+    <div style="width:130px"><label>Show</label><select id="tOwn">${opts([["all","All"],["own","Owned"],["not","Not owned"],["tgt","Target"]], UI.tOwn)}</select></div>
+  </div><div class="tfrow" style="margin-top:10px">${TF.map(grp).join("")}</div>
+  <div class="hint" id="tCount"></div></div>
   <div class="card scroll" id="tTable"></div>`;
   drawTrainees();
 };
@@ -386,7 +405,7 @@ function drawTrainees() {
   });
   let list = UMAS.filter(u => avail(u)
     && (!q || (u.n + " " + u.t).toLowerCase().includes(q))
-    && (UI.tOwn === "all" || (UI.tOwn === "own") === !!root.umas[u.id])
+    && (UI.tOwn === "all" || (UI.tOwn === "tgt" ? !!root.tgt[u.id] : (UI.tOwn === "own") === !!root.umas[u.id]))
     && passes(u));
   const [key, dir] = UI.tSort;
   const kv = u => {
@@ -398,7 +417,7 @@ function drawTrainees() {
   };
   list.sort((a, b) => { const x = kv(a), y = kv(b); return (x < y ? -1 : x > y ? 1 : 0) * dir; });
   const nOwn = ownedUmas().length;
-  $("tCount").textContent = `${list.length} shown · ${nOwn} owned`;
+  $("tCount").textContent = `${list.length} shown · ${nOwn} owned · ${Object.keys(root.tgt).length} target`;
   const th = (k, l, c = "") => `<th data-sort="${k}" data-tab="t" class="${c}${key === k ? " sorted" : ""}">${l}${key === k ? (dir > 0 ? " ▴" : " ▾") : ""}</th>`;
   const rows = list.map(u => {
     const o = root.umas[u.id], star = o ? o.s : 0, st = uStats(u, star || u.r);
@@ -407,10 +426,11 @@ function drawTrainees() {
     return `<tr class="${o ? "" : "off"}"><td>${uName(u)}</td>
       <td><select class="mini" data-act="ustar" data-id="${u.id}">${opts(starOpts, star)}</select></td>
       <td><select class="mini" data-act="upot" data-id="${u.id}"${o ? "" : " disabled"}>${opts([1,2,3,4,5].map(i => [i, "P" + i]), o ? o.p : 1)}</select></td>
+      <td class="ctr"><input type="checkbox" data-act="utgt" data-id="${u.id}"${root.tgt[u.id] ? " checked" : ""}></td>
       ${st.map(v => `<td class="num">${v}</td>`).join("")}<td class="num">${st.reduce((a, b) => a + b, 0)}</td>
       <td class="mono">${growth(u)}</td>${aptTd(u, 0, 2)}${aptTd(u, 2, 6)}${aptTd(u, 6, 10)}</tr>`;
   }).join("");
-  $("tTable").innerHTML = `<table class="tt"><thead><tr>${th("name", "Trainee")}${th("star", "Stars")}<th>Potential</th>
+  $("tTable").innerHTML = `<table class="tt"><thead><tr>${th("name", "Trainee")}${th("star", "Stars")}<th>Potential</th><th class="ctr">Target</th>
     ${STAT.map((s, i) => th(String(i), s, "num")).join("")}${th("tot", "Total", "num")}<th>Growth</th>${APT_TH}</tr></thead>
     <tbody>${rows}</tbody></table>`;
 }
@@ -418,14 +438,32 @@ function uInfo(u) {
   const o = root.umas[u.id];
   const rows = [1,2,3,4,5].filter(i => u.s[i]).map(i => `<tr${o && o.s === i ? ' class="sel"' : ""}><td>${i}★</td>${u.s[i].map(v => `<td class="num">${v}</td>`).join("")}<td class="num">${u.s[i].reduce((a, b) => a + b, 0)}</td></tr>`).join("");
   const bn = u.b.map(([t, e]) => day(t) + (e ? " est" : "")).join(" · ");
-  const tg = D.talent[u.tg] || [];
-  const pot = tg.map((c, i) => `<tr><td>P${i + 2}</td><td class="muted">${c.map(([id, n]) => `${esc(D.items[id] || id)} <span class="gold mono">${n}</span>`).join(" · ")}</td></tr>`).join("");
-  modal(`<div class="head">${esc(u.n)} · ${esc(u.t)}</div>
+  // Potential: one row per item, and for each level both that level's cost and the
+  // running total from the current potential up to it.
+  const tg = D.talent[u.tg] || [], cur = o ? o.p : 1;
+  const ids = [...new Set(tg.flat().map(([id]) => id))].sort((a, b) => itemOrder(a) - itemOrder(b));
+  const pot = ids.map(id => {
+    let run = 0;
+    return `<tr><td>${esc(D.items[id] || id)}</td>${tg.map((c, i) => {
+      const lv = i + 2, n = (c.find(x => x[0] === id) || [0, 0])[1];
+      if (lv > cur) run += n;
+      return lv <= cur ? `<td class="num muted">${n || ""}</td><td class="num"></td>`
+        : `<td class="num">${n || ""}</td><td class="num gold">${run || ""}</td>`;
+    }).join("")}</tr>`;
+  }).join("");
+  const potHead = `<tr><th rowspan="2">Item</th>${tg.map((c, i) => `<th class="num pl" colspan="2">P${i + 2}</th>`).join("")}</tr>
+    <tr>${tg.map(() => `<th class="num">Lvl</th><th class="num">Total</th>`).join("")}</tr>`;
+  const GROW_FULL = ["Speed", "Stamina", "Power", "Guts", "Wit"];
+  modal(`<div class="mtitle">${esc(u.n)}</div><div class="msub">${esc(u.t)}</div>
     <div class="scroll"><table><thead><tr><th>Stars</th>${STAT.map(s => `<th class="num">${s}</th>`).join("")}<th class="num">Total</th></tr></thead><tbody>${rows}</tbody></table></div>
-    <div class="scroll" style="margin-top:12px"><table><thead><tr>${APT_TH}<th>Growth</th></tr></thead><tbody><tr>${aptTd(u, 0, 2)}${aptTd(u, 2, 6)}${aptTd(u, 6, 10)}<td class="mono">${growth(u)}</td></tr></tbody></table></div>
+    <div class="row" style="gap:24px;margin-top:12px;align-items:flex-start">
+      <div class="scroll"><table style="width:auto"><thead><tr>${APT_TH}</tr></thead><tbody><tr>${aptTd(u, 0, 2)}${aptTd(u, 2, 6)}${aptTd(u, 6, 10)}</tr></tbody></table></div>
+      <div class="scroll"><table style="width:auto"><thead><tr>${GROW_FULL.map(s => `<th class="num">${s}</th>`).join("")}</tr></thead>
+        <tbody><tr>${u.g.map(v => `<td class="num">${v ? `<span class="gold">${v}%</span>` : `<span class="gz">–</span>`}</td>`).join("")}</tr></tbody></table></div></div>
     <div class="hint">Unique: ${esc(u.u ? skName(u.u) : "—")}${u.en ? " · Global " + u.en : " · JP only"}</div>
     ${bn ? `<div class="hint">Banners: ${bn}</div>` : ""}
-    ${pot ? `<details open><summary>Potential costs</summary><table><tbody>${pot}</tbody></table></details>` : ""}`);
+    ${pot ? `<div class="head" style="margin-top:16px">Potential<span class="vbar">|</span>Now P${cur}</div>
+      <div class="scroll"><table class="pot"><thead>${potHead}</thead><tbody>${pot}</tbody></table></div>` : ""}`);
 }
 
 /* ---------------- Supports ---------------- */
@@ -749,6 +787,10 @@ function drawTeamOut() {
     <div class="card scroll"><div class="head">Ranked</div><table><thead><tr><th class="num">#</th><th class="num">Score</th><th class="num">Δ</th><th class="num">Size</th><th class="num">Sparks</th><th>vs best</th><th></th></tr></thead><tbody>${alts}</tbody></table></div>`;
 }
 
+/* ---------------- Aces / Parents (placeholders) ---------------- */
+VIEWS.aces = () => { view.innerHTML = `<div class="card"><div class="head" style="margin:0">Aces</div></div>`; };
+VIEWS.parents = () => { view.innerHTML = `<div class="card"><div class="head" style="margin:0">Parents</div></div>`; };
+
 /* ---------------- Planner ---------------- */
 VIEWS.planner = () => {
   view.innerHTML = `<div class="card"><label style="display:inline"><input type="checkbox" data-act="ponly"${root.plan.only ? " checked" : ""}>Targets only</label></div>
@@ -779,8 +821,7 @@ function drawPlanner() {
   }).join("");
   $("pU").innerHTML = `<div class="head">Trainees</div><table><thead><tr><th>Trainee</th><th class="num">Stars</th><th>Target</th><th class="num">Shards</th><th class="num">Pot</th><th>Target</th><th>Items</th></tr></thead><tbody>${urows || `<tr><td colspan="7" class="muted">—</td></tr>`}</tbody></table>`;
   // Items: shoes first, then sashes, then the rest.
-  const order = id => (+id <= 13 ? 0 : +id === 44 ? 2 : 1) * 1000 + +id;
-  const ik = Object.keys(items).sort((a, b) => order(a) - order(b));
+  const ik = Object.keys(items).sort((a, b) => itemOrder(a) - itemOrder(b));
   $("pI").innerHTML = `<div class="head">Items</div><table><thead><tr><th>Item</th><th class="num">Need</th><th class="num">Have</th><th class="num">Short</th></tr></thead><tbody>
     ${ik.map(id => { const have = root.plan.inv[id] || 0, sh = items[id] - have;
       return `<tr><td>${esc(D.items[id] || id)}</td><td class="num">${fN(items[id])}</td><td class="num"><input class="mini" type="number" min="0" data-act="pinv" data-id="${id}" value="${have || ""}"></td><td class="num ${sh > 0 ? "neg" : "pos"}">${sh > 0 ? fN(sh) : "0"}</td></tr>`; }).join("") || `<tr><td colspan="4" class="muted">—</td></tr>`}</tbody></table>`;
@@ -923,6 +964,7 @@ function onChange(e) {
       if (+v) root.umas[id] = {s: +v, p: (root.umas[id] || {}).p || 1}; else delete root.umas[id];
       save(); drawTrainees(); break;
     case "upot": if (root.umas[id]) root.umas[id].p = +v; save(); break;
+    case "utgt": if (el.checked) root.tgt[id] = 1; else delete root.tgt[id]; save(); drawTrainees(); break;
     case "slb":
       if (v === "") delete root.sups[id]; else root.sups[id] = {lb: +v};
       save(); drawSupports(); break;
@@ -962,6 +1004,10 @@ view.addEventListener("change", onChange);
 view.addEventListener("input", onInput);
 // <details> toggle doesn't bubble; catch it on the way down to remember which filter groups are open.
 view.addEventListener("toggle", e => { const k = e.target.dataset && e.target.dataset.k; if (k && UI.tf[k]) UI.tf[k].open = e.target.open; }, true);
+// Filter drop-downs close on a click anywhere else, like a select would.
+document.addEventListener("click", e => {
+  document.querySelectorAll("details.fgrp[open]").forEach(d => { if (!d.contains(e.target)) d.open = false; });
+});
 $("modalcard").addEventListener("click", onClick);
 window.addEventListener("hashchange", go);
 

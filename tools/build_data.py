@@ -54,6 +54,8 @@ def main(dl):
             "u": (c.get("skills_unique") or [None])[0],
             # Potential skills, unlocked at P2..P5. Global's list where it differs from JP's.
             "aw": (c.get("skills_awakening_en") or c.get("skills_awakening") or [])[:4],
+            # Innate skills: always available, and their hint levels can be raised too.
+            "in": c.get("skills_innate") or [],
         })
 
     sups = []
@@ -97,6 +99,7 @@ def main(dl):
         if u["u"]:
             used.add(u["u"])
         used.update(u["aw"])
+        used.update(u["in"])
     skills = {}
     for k in raw["skills"]:
         if k["id"] in used:

@@ -170,6 +170,14 @@ td.apt,th.apt{padding-left:4px;padding-right:4px;white-space:nowrap}
 .pinrow .nm{min-width:180px}
 .pinrow select{width:auto}
 .split{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+/* planner trainee rows: targets on line 1, hint targets on line 2, items spanning both */
+table.ptab tr.pu1 td{border-bottom:0;padding-bottom:2px}
+table.ptab tr.pu2 td{padding-top:2px;padding-bottom:10px}
+table.ptab td.pitems{vertical-align:top;font-size:12px;line-height:1.55;min-width:220px}
+.hrow{display:flex;flex-wrap:wrap;gap:6px 14px}
+.hcell{display:flex;flex-direction:column;gap:2px;min-width:110px}
+.hcell.off{opacity:.45}
+.hcell .ttl{white-space:nowrap}
 /* collapsible planner sections: the card header is the toggle; collapsed drops only its trailing margin */
 details.sect{border-top:0;padding:0;margin:0}
 details.sect>summary.head{font-size:10.5px;color:var(--sub);font-weight:700;margin-bottom:10px}
@@ -237,6 +245,10 @@ const HINT_COST = {
   r: [[[162, 8], [44, 20]], [[162, 16], [44, 40]], [[163, 12], [44, 60]]],
 };
 const HINT_ITEMS = [160, 161, 162, 163];
+// Hint-able skills: innate ones (open from the start) then potential skills (P2..P5).
+// Levels are stored by skill id: {skillId: level}.
+const hintSkills = u => u.in.map(sk => ({sk, unlock: 1})).concat(u.aw.map((sk, k) => ({sk, unlock: k + 2})));
+const hLv = (h, sk) => (h && h[sk]) || 0;
 function hintCost(skill, from, to, into = {}) {
   const steps = HINT_COST[skGold(skill) ? "r" : "n"];
   for (let l = from; l < to; l++) for (const [id, n] of steps[l]) into[id] = (into[id] || 0) + n;
@@ -302,6 +314,11 @@ function normalize(r) {
   for (const k of ["team", "plan", "set", "inv"]) for (const kk in b[k]) if (r[k][kk] == null) r[k][kk] = b[k][kk];
   r.decks.forEach(normDeck);
   for (const id in r.tgt) if (r.umas[id]) delete r.tgt[id];
+  // Hint levels were briefly stored as a 4-slot array of potential skills; now {skillId: lv}.
+  for (const src of [r.umas, r.plan.umas]) for (const id in src) {
+    const x = src[id], u = UBY[id];
+    if (x && Array.isArray(x.h)) x.h = u ? Object.fromEntries(u.aw.map((sk, k) => [sk, x.h[k] || 0]).filter(e => e[1])) : {};
+  }
   r.schema = SCHEMA;
   return r;
 }
@@ -538,7 +555,7 @@ function uInfo(u) {
         <tbody><tr>${u.g.map(v => `<td class="num">${v ? `<span class="gold">${v}%</span>` : `<span class="gz">–</span>`}</td>`).join("")}</tr></tbody></table></div></div>
     ${pot ? `<div class="head" style="margin-top:16px">Potential<span class="vbar">|</span>Now P${cur}</div>
       <div class="scroll"><table class="pot"><thead>${potHead}</thead><tbody>${pot}</tbody></table></div>` : ""}
-    ${o && u.aw.length ? hintTable(u, o) : ""}
+    ${o && hintSkills(u).length ? hintTable(u, o) : ""}
     ${rel}`);
 }
 
@@ -884,11 +901,11 @@ const invOn = u => { const v = root.inv.on[u.id]; return v == null ? !!root.umas
 const invPool = () => UMAS.filter(u => avail(u) || jpOnly(u));
 function maxNeed(u) {
   const o = root.umas[u.id];
-  const s0 = o ? o.s : u.r, p0 = o ? o.p : 1, h = (o && o.h) || [];
+  const s0 = o ? o.s : u.r, p0 = o ? o.p : 1, h = o && o.h;
   let shards = 0;
   for (let i = s0 + 1; i <= 5; i++) shards += STAR_SHARDS[i];
   const hint = {};
-  u.aw.forEach((sk, k) => hintCost(sk, h[k] || 0, HINT_MAX, hint));
+  hintSkills(u).forEach(({sk}) => hintCost(sk, hLv(h, sk), HINT_MAX, hint));
   return {shards, pot: potCost(u, p0, 5), hint};
 }
 function invTotals() {
@@ -967,25 +984,24 @@ function invTrainees() {
 /* ---------------- Planner ---------------- */
 VIEWS.planner = () => {
   view.innerHTML = `<div class="card"><label style="display:inline"><input type="checkbox" data-act="ponly"${root.plan.only ? " checked" : ""}>Targets only</label></div>
-    <div class="card scroll" id="pU"></div><div class="card scroll" id="pK"></div><div class="card scroll" id="pI"></div><div class="card scroll" id="pS"></div><div class="card" id="pH"></div>`;
+    <div class="card scroll" id="pU"></div><div class="card scroll" id="pI"></div><div class="card scroll" id="pS"></div><div class="card" id="pH"></div>`;
   drawPlanner();
 };
 // A collapsible planner section; open unless the user closed it (root.plan.open).
 const sect = (key, head, body) =>
   `<details class="sect" data-sec="${key}"${root.plan.open[key] === false ? "" : " open"}><summary class="head">${head}</summary>${body}</details>`;
-// Owned trainee's potential skills with editable hint levels. A skill whose potential
-// level isn't reached yet is locked, as in the game.
+// Owned trainee's innate and potential skills with editable hint levels. A potential
+// skill whose level isn't reached yet is locked, as in the game.
 function hintTable(u, o) {
-  const h = o.h || [];
-  const rows = u.aw.map((sk, k) => {
-    const unlock = k + 2, lv = h[k] || 0, locked = o.p < unlock;
+  const rows = hintSkills(u).map(({sk, unlock}) => {
+    const lv = hLv(o.h, sk), locked = o.p < unlock;
     const left = hintCost(sk, lv, HINT_MAX);
     const cost = Object.keys(left).sort((a, b) => a - b).map(id => `${esc(D.items[id] || id)} <span class="gold mono">${left[id]}</span>`).join(" · ");
-    return `<tr class="${locked ? "off" : ""}"><td class="mono">P${unlock}</td><td class="${skGold(sk) ? "gold" : ""}">${esc(skName(sk))}</td>
-      <td><select class="mini" data-act="uhint" data-id="${u.id}" data-k="${k}"${locked ? " disabled" : ""}>${opts([0,1,2,3].map(i => [i, "Lv" + i]), lv)}</select></td>
+    return `<tr class="${locked ? "off" : ""}"><td class="mono">${unlock > 1 ? "P" + unlock : "Innate"}</td><td class="${skGold(sk) ? "gold" : ""}">${esc(skName(sk))}</td>
+      <td><select class="mini" data-act="uhint" data-id="${u.id}" data-sk="${sk}"${locked ? " disabled" : ""}>${opts([0,1,2,3].map(i => [i, "Lv" + i]), lv)}</select></td>
       <td class="muted">${cost || "—"}</td></tr>`;
   }).join("");
-  return `<div class="head" style="margin-top:16px">Potential skills</div>
+  return `<div class="head" style="margin-top:16px">Skill hints</div>
     <div class="scroll"><table><thead><tr><th>Unlock</th><th>Skill</th><th>Hint</th><th>To Lv3</th></tr></thead><tbody>${rows}</tbody></table></div>`;
 }
 function potCost(u, from, to) {
@@ -995,40 +1011,35 @@ function potCost(u, from, to) {
 }
 function drawPlanner() {
   const only = root.plan.only;
-  // Trainees: stars and potential.
+  // Trainees: stars and potential on the first line, hint-level targets on the second,
+  // and one Items cell spanning both with everything that trainee needs.
   const items = {};
-  const urows = ownedUmas().sort((a, b) => a.n.localeCompare(b.n)).map(u => {
+  const urows = ownedUmas().sort((a, b) => a.n.localeCompare(b.n) || a.t.localeCompare(b.t)).map(u => {
     const o = root.umas[u.id], p = root.plan.umas[u.id] || {};
     const ts = Math.max(o.s, p.s || o.s), tp = Math.max(o.p, p.p || o.p);
     let shards = 0; for (let i = o.s + 1; i <= ts; i++) shards += STAR_SHARDS[i];
     const need = potCost(u, o.p, tp);
-    for (const id in need) items[id] = (items[id] || 0) + need[id];
-    if (only && ts === o.s && tp === o.p) return "";
-    const so = []; for (let i = o.s; i <= 5; i++) so.push([i, i + "★"]);
-    const po = []; for (let i = o.p; i <= 5; i++) po.push([i, "P" + i]);
-    return `<tr><td>${uName(u)}</td><td class="num">${o.s}★</td><td><select class="mini" data-act="pus" data-id="${u.id}">${opts(so, ts)}</select></td>
-      <td class="num">${shards || ""}</td><td class="num">P${o.p}</td><td><select class="mini" data-act="pup" data-id="${u.id}">${opts(po, tp)}</select></td>
-      <td class="muted">${Object.keys(need).map(id => `${esc(D.items[id] || id)} <span class="gold mono">${need[id]}</span>`).join(" · ")}</td></tr>`;
-  }).join("");
-  $("pU").innerHTML = sect("pU", "Trainees", `<table><thead><tr><th>Trainee</th><th class="num">Stars</th><th>Target</th><th class="num">Shards</th><th class="num">Pot</th><th>Target</th><th>Items</th></tr></thead><tbody>${urows || `<tr><td colspan="7" class="muted">—</td></tr>`}</tbody></table>`);
-  // Skill hints: a target per potential skill. A skill can only be targeted once the
-  // target potential level unlocks it.
-  const krows = ownedUmas().filter(u => u.aw.length).sort((a, b) => a.n.localeCompare(b.n)).map(u => {
-    const o = root.umas[u.id], p = root.plan.umas[u.id] || {}, cur = o.h || [], tgt = p.h || [];
-    const tp = Math.max(o.p, p.p || o.p), need = {};
-    let any = false;
-    const cells = u.aw.map((sk, k) => {
-      const c = cur[k] || 0, unlocked = tp >= k + 2, t = unlocked ? Math.max(c, tgt[k] || 0) : c;
-      if (t > c) { any = true; hintCost(sk, c, t, need); }
+    let hinted = false;
+    // A skill can only be targeted once the target potential unlocks it.
+    const hcells = hintSkills(u).map(({sk, unlock}) => {
+      const c = hLv(o.h, sk), open = tp >= unlock, t = open ? Math.max(c, hLv(p.h, sk)) : c;
+      if (t > c) { hinted = true; hintCost(sk, c, t, need); }
       const lo = []; for (let i = c; i <= HINT_MAX; i++) lo.push([i, "Lv" + i]);
-      return `<td><div class="ttl ${skGold(sk) ? "gold" : ""}" style="white-space:nowrap">${esc(skName(sk))}</div>
-        <select class="mini" data-act="puh" data-id="${u.id}" data-k="${k}"${unlocked ? "" : " disabled"}>${opts(lo, t)}</select></td>`;
+      return `<div class="hcell${open ? "" : " off"}"><div class="ttl ${skGold(sk) ? "gold" : ""}">${unlock > 1 ? `<span class="mono">P${unlock}</span> ` : ""}${esc(skName(sk))}</div>
+        <select class="mini" data-act="puh" data-id="${u.id}" data-sk="${sk}"${open ? "" : " disabled"}>${opts(lo, t)}</select></div>`;
     }).join("");
     for (const id in need) items[id] = (items[id] || 0) + need[id];
-    if (only && !any) return "";
-    return `<tr><td>${uName(u)}</td>${cells}<td class="muted">${Object.keys(need).sort((a, b) => a - b).map(id => `${esc(D.items[id] || id)} <span class="gold mono">${need[id]}</span>`).join(" · ")}</td></tr>`;
+    if (only && ts === o.s && tp === o.p && !hinted) return "";
+    const so = []; for (let i = o.s; i <= 5; i++) so.push([i, i + "★"]);
+    const po = []; for (let i = o.p; i <= 5; i++) po.push([i, "P" + i]);
+    const il = Object.keys(need).sort((a, b) => itemOrder(a) - itemOrder(b))
+      .map(id => `<div>${esc(D.items[id] || id)} <span class="gold mono">${need[id]}</span></div>`).join("");
+    return `<tr class="pu1"><td>${uName(u)}</td><td class="num">${o.s}★</td><td><select class="mini" data-act="pus" data-id="${u.id}">${opts(so, ts)}</select></td>
+      <td class="num">${shards || ""}</td><td class="num">P${o.p}</td><td><select class="mini" data-act="pup" data-id="${u.id}">${opts(po, tp)}</select></td>
+      <td class="muted pitems" rowspan="2">${il}</td></tr>
+      <tr class="pu2"><td colspan="6"><div class="hrow">${hcells}</div></td></tr>`;
   }).join("");
-  $("pK").innerHTML = sect("pK", "Skill hints", `<table><thead><tr><th>Trainee</th><th>P2</th><th>P3</th><th>P4</th><th>P5</th><th>Items</th></tr></thead><tbody>${krows || `<tr><td colspan="6" class="muted">—</td></tr>`}</tbody></table>`);
+  $("pU").innerHTML = sect("pU", "Trainees", `<table class="ptab"><thead><tr><th>Trainee</th><th class="num">Stars</th><th>Target</th><th class="num">Shards</th><th class="num">Pot</th><th>Target</th><th>Items</th></tr></thead><tbody>${urows || `<tr><td colspan="7" class="muted">—</td></tr>`}</tbody></table>`);
   // Items: shoes first, then sashes, then the rest.
   const ik = Object.keys(items).sort((a, b) => itemOrder(a) - itemOrder(b));
   $("pI").innerHTML = sect("pI", "Items", `<table><thead><tr><th>Item</th><th class="num">Need</th><th class="num">Have</th><th class="num">Short</th></tr></thead><tbody>
@@ -1191,8 +1202,8 @@ function onChange(e) {
     case "uhint": {
       const o = root.umas[id];
       if (!o) break;
-      o.h = (o.h || []).slice(0, 4); while (o.h.length < 4) o.h.push(0);
-      o.h[+el.dataset.k] = +v;
+      o.h = o.h || {};
+      o.h[el.dataset.sk] = +v;
       save(); uInfo(UBY[id]); if (tab === "inventory") drawInv(); break;
     }
     case "slb":
@@ -1215,8 +1226,8 @@ function onChange(e) {
     case "pup": root.plan.umas[id] = {...(root.plan.umas[id] || {}), p: +v}; save(); drawPlanner(); break;
     case "puh": {
       const t = root.plan.umas[id] = {...(root.plan.umas[id] || {})};
-      t.h = (t.h || []).slice(0, 4); while (t.h.length < 4) t.h.push(0);
-      t.h[+el.dataset.k] = +v; save(); drawPlanner(); break;
+      t.h = {...(t.h || {})};
+      t.h[el.dataset.sk] = +v; save(); drawPlanner(); break;
     }
     case "plb": root.plan.sups[id] = {lb: +v}; save(); drawPlanner(); break;
     case "plv": {

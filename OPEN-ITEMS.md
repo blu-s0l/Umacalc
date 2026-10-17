@@ -16,7 +16,7 @@ Umamusume: Pretty Derby (Global). One `index.html` in the house style from
 - Coin costs for potential levels aren't in the data, so the planner shows items only.
 - **Check the hint-level costs in the Global client.** `HINT_COST` comes from JP guides, not
   game data, because GameTora doesn't publish it. Normal skills: Book ×4 / ×8, then Textbook ×6;
-  Glimmer 5 / 10 / 15. Rare skills: Rare Book ×8 / ×16, then Rare Textbook ×12; Glimmer
+  Glimmer 5 / 10 / 15. Applies to innate skills (3, always open) and potential skills (4, unlocked P2–P5). Rare skills: Rare Book ×8 / ×16, then Rare Textbook ×12; Glimmer
   20 / 40 / 60. Max Lv3. Monies are left out, since only the Lv0→1 cost (10,000) is documented.
 - Planner's Items table and the Inventory tab share `root.plan.inv`. Planner is target-based and
   Inventory is max-everything. If Planner ends up redundant, fold it into Inventory.
@@ -35,8 +35,8 @@ Umamusume: Pretty Derby (Global). One `index.html` in the house style from
   all four potential skills. Owned trainees are on by default and unowned ones off
   (`root.inv.on`). Shards are per trainee, so the still-needed count sums each trainee's own
   shortfall; one trainee's surplus never covers another. Hint levels are stored on the owned
-  trainee (`root.umas[id].h`, four entries). A skill stays locked until its potential level is
-  reached.
+  trainee as `root.umas[id].h = {skillId: level}`, covering the 3 innate and 4 potential skills.
+  A potential skill stays locked until its potential level is reached.
 - **JP-only trainees** (JP release ≤ today, not yet on Global) are listed on Trainees so they
   can be targeted. They can't be owned unless Data → Include JP-only is on.
 - **Estimated Global release** (`estGlobal`) is a least-squares line of Global date against JP

@@ -18,15 +18,21 @@ Umamusume: Pretty Derby (Global). One `index.html` in the house style from
     and if none of five pins can run Dirt, only four can be aces.
   - **No point value needed.** The goal is to maximise the number of pinned aces, then build the
     best team around that.
+  - **Two builds, shown side by side or switchable** (Steve, 2026-10-17):
+    - **Best:** the current solve, with Must include honoured. Each race's ace is its
+      highest-scoring member, whether pinned or not.
+    - **Priority ace:** the two-stage solve below. Pins become aces wherever possible. A race
+      without a pinned ace takes its highest-scoring member.
+    In both, the ace's small bonus goes to whoever is ace, so the ace is always the race's best
+    runner unless the priority rule says otherwise.
   - **Not the Aces tab.** That tab is for user-entered aces in a different game mode and has
     nothing to do with this.
-  - **Planned approach, in two stages:**
+  - **Priority-ace build, in two stages:**
     1. Max-cardinality matching of pins to races. A pin can match a race if it has an eligible
        slot there and its own race lock allows it. Ties go to the higher slot score. Each matched
        pin is that race's ace, so fix its race.
     2. Run the usual team solve with those races fixed; unmatched pins stay free.
-  - **Ace for races without a pin:** the highest-scoring member, shown as ace too. Mark aces in
-    the team table (first in their race block, with a marker) and keep them first in
+  - **Display:** mark aces in the team table (first in their race block, with a marker) and keep them first in
     alternatives.
   - **Why not one flow model:** pinned and unpinned runners merge at the shared style-slot
     bottleneck, so a single min-cost flow can't count pinned aces per race. That is why the

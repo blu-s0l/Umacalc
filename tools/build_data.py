@@ -11,6 +11,8 @@ import json, os, sys, urllib.request, datetime
 
 BASE = "https://gametora.com/data"
 UA = {"User-Agent": "Mozilla/5.0 (Umacalc data build)"}
+# Book / Textbook of Hints, Rare Book / Rare Textbook of Hints: used for potential-skill hint levels.
+HINT_BOOKS = [160, 161, 162, 163]
 FILES = ["character-cards", "characters", "support-cards", "support_effects", "skills",
          "db-files/support_card_level", "db-files/card_talent_upgrade",
          "en/db-files/card_talent_upgrade", "items", "gacha/support_banners",
@@ -50,6 +52,8 @@ def main(dl):
             "r": c["rarity"], "a": "".join(c["aptitude"]), "s": st, "g": c["stat_bonus"],
             "en": c.get("release_en"), "jp": c.get("release"), "tg": c["talent_group"],
             "u": (c.get("skills_unique") or [None])[0],
+            # Potential skills, unlocked at P2..P5. Global's list where it differs from JP's.
+            "aw": (c.get("skills_awakening_en") or c.get("skills_awakening") or [])[:4],
         })
 
     sups = []
@@ -92,6 +96,7 @@ def main(dl):
     for u in umas:
         if u["u"]:
             used.add(u["u"])
+        used.update(u["aw"])
     skills = {}
     for k in raw["skills"]:
         if k["id"] in used:
@@ -115,6 +120,7 @@ def main(dl):
     for g in talent.values():
         for cost in g:
             items_used.update(i for i, _ in cost)
+    items_used.update(HINT_BOOKS)
     items = {i["id"]: i.get("name_en_gl") if i.get("name_en_gl") not in (None, "Unused") else i.get("name_en")
              for i in raw["items"] if i["id"] in items_used}
 

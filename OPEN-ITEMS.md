@@ -14,6 +14,12 @@ Umamusume: Pretty Derby (Global). One `index.html` in the house style from
 - Conditional unique effects (types 101–122, e.g. "bonus while friendship ≥ X") are not modelled.
   They get a flat `COND_UNIQUE` score credit and an asterisk.
 - Coin costs for potential levels aren't in the data, so the planner shows items only.
+- **Check the hint-level costs in the Global client.** `HINT_COST` comes from JP guides, not
+  game data, because GameTora doesn't publish it. Normal skills: Book ×4 / ×8, then Textbook ×6;
+  Glimmer 5 / 10 / 15. Rare skills: Rare Book ×8 / ×16, then Rare Textbook ×12; Glimmer
+  20 / 40 / 60. Max Lv3. Monies are left out, since only the Lv0→1 cost (10,000) is documented.
+- Planner's Items table and the Inventory tab share `root.plan.inv`. Planner is target-based and
+  Inventory is max-everything. If Planner ends up redundant, fold it into Inventory.
 - Team builder ideas: an ace pick per race; weighting a race by your own priorities;
   "has this trainee's unique skill reached Lv X" (star level).
 - Deck scoring ignores the deck's trainee: growth bonuses, distance and the scenario. A per-trainee
@@ -25,6 +31,12 @@ Umamusume: Pretty Derby (Global). One `index.html` in the house style from
   `release_en <= today` at runtime, so new Global releases show up without editing code. Rebuild
   `data.js` only when GameTora adds new trainees or cards.
   `py -I tools/build_data.py <some-empty-download-dir>`
+- **Inventory = what it takes to max every switched-on trainee:** 5★, P5, and Lv3 hints on
+  all four potential skills. Owned trainees are on by default and unowned ones off
+  (`root.inv.on`). Shards are per trainee, so the still-needed count sums each trainee's own
+  shortfall; one trainee's surplus never covers another. Hint levels are stored on the owned
+  trainee (`root.umas[id].h`, four entries). A skill stays locked until its potential level is
+  reached.
 - **JP-only trainees** (JP release ≤ today, not yet on Global) are listed on Trainees so they
   can be targeted. They can't be owned unless Data → Include JP-only is on.
 - **Estimated Global release** (`estGlobal`) is a least-squares line of Global date against JP

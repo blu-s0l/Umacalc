@@ -170,6 +170,13 @@ td.apt,th.apt{padding-left:4px;padding-right:4px;white-space:nowrap}
 .pinrow .nm{min-width:180px}
 .pinrow select{width:auto}
 .split{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.igrid{grid-template-columns:repeat(auto-fill,minmax(150px,1fr))}
+.igrid label{text-transform:none;letter-spacing:0;font-size:11.5px;font-weight:600;color:var(--sub);
+             white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:0 24px}
+.srow{display:flex;justify-content:space-between;gap:10px;padding:5px 2px;border-bottom:1px solid var(--line);font-size:12.5px}
+table.invt tr.sech td{padding-top:10px;border-bottom:1px solid var(--line2)}
+table.invt tr.hr td{padding:6px 0 0;border-bottom:2px solid var(--line2)}
 .split3{display:grid;grid-template-columns:repeat(3,minmax(0,340px));justify-content:start;gap:18px}
 @media(max-width:900px){.split3{grid-template-columns:1fr}}
 footer{margin-top:24px}
@@ -216,6 +223,20 @@ const RAR = ["", "R", "SR", "SSR"];
 const STAT = ["Spd", "Sta", "Pow", "Gut", "Wit"];
 const GRADES = "SABCDEFG";
 const STAR_SHARDS = [0, 0, 50, 100, 200, 300];     // cost to reach star i from i-1
+// Hint level of a potential skill (P2..P5 unlock one each), max Lv3. Cost of each step
+// [item, n]: Book 160 / Textbook 161 for normal skills, Rare Book 162 / Rare Textbook 163
+// for rare ones, plus Dream Glimmer 44. From JP guides; Monies are left out (only Lv1 is known).
+const HINT_MAX = 3;
+const HINT_COST = {
+  n: [[[160, 4], [44, 5]],  [[160, 8], [44, 10]],  [[161, 6], [44, 15]]],
+  r: [[[162, 8], [44, 20]], [[162, 16], [44, 40]], [[163, 12], [44, 60]]],
+};
+const HINT_ITEMS = [160, 161, 162, 163];
+function hintCost(skill, from, to, into = {}) {
+  const steps = HINT_COST[skGold(skill) ? "r" : "n"];
+  for (let l = from; l < to; l++) for (const [id, n] of steps[l]) into[id] = (into[id] || 0) + n;
+  return into;
+}
 // Max level a card can reach at each limit break.
 const LVCAP = {1: [20,25,30,35,40], 2: [25,30,35,40,45], 3: [30,35,40,45,50]};
 // The breakpoints GameTora's effect arrays are keyed on; -1 means "not set here".
@@ -251,7 +272,7 @@ const EFF_PCT = new Set([1,2,8,15,16,18,25,26,27,28]);
 
 /* ---------------- state ---------------- */
 function blank() {
-  return {schema: SCHEMA, umas: {}, tgt: {}, sups: {}, decks: [],
+  return {schema: SCHEMA, umas: {}, tgt: {}, sups: {}, decks: [], inv: {on: {}, shards: {}},
           team: {pins: [], prefs: [], excl: [], minG: "B", alts: 8},
           plan: {umas: {}, sups: {}, inv: {}, skills: [], only: false},
           set: {jp: false}};
@@ -273,7 +294,7 @@ function normalize(r) {
   for (const k in b) {
     if (r[k] == null || typeof r[k] !== typeof b[k] || Array.isArray(r[k]) !== Array.isArray(b[k])) r[k] = b[k];
   }
-  for (const k of ["team", "plan", "set"]) for (const kk in b[k]) if (r[k][kk] == null) r[k][kk] = b[k][kk];
+  for (const k of ["team", "plan", "set", "inv"]) for (const kk in b[k]) if (r[k][kk] == null) r[k][kk] = b[k][kk];
   r.decks.forEach(normDeck);
   for (const id in r.tgt) if (r.umas[id]) delete r.tgt[id];
   r.schema = SCHEMA;
@@ -385,7 +406,7 @@ function banners(b) {
 }
 
 /* ---------------- nav / shell ---------------- */
-const TABS = [["trainees","Trainees"],["supports","Supports"],["decks","Decks"],["teams","Teams"],["aces","Aces"],["parents","Parents"],["planner","Planner"],["data","Data"]];
+const TABS = [["trainees","Trainees"],["supports","Supports"],["decks","Decks"],["teams","Teams"],["aces","Aces"],["parents","Parents"],["planner","Planner"],["inventory","Inventory"],["data","Data"]];
 const VIEWS = {};
 let tab = "trainees";
 function go() {
@@ -512,6 +533,7 @@ function uInfo(u) {
         <tbody><tr>${u.g.map(v => `<td class="num">${v ? `<span class="gold">${v}%</span>` : `<span class="gz">–</span>`}</td>`).join("")}</tr></tbody></table></div></div>
     ${pot ? `<div class="head" style="margin-top:16px">Potential<span class="vbar">|</span>Now P${cur}</div>
       <div class="scroll"><table class="pot"><thead>${potHead}</thead><tbody>${pot}</tbody></table></div>` : ""}
+    ${o && u.aw.length ? hintTable(u, o) : ""}
     ${rel}`);
 }
 
@@ -850,12 +872,114 @@ function drawTeamOut() {
 VIEWS.aces = () => { view.innerHTML = `<div class="card"><div class="head" style="margin:0">Aces</div></div>`; };
 VIEWS.parents = () => { view.innerHTML = `<div class="card"><div class="head" style="margin:0">Parents</div></div>`; };
 
+/* ---------------- Inventory ---------------- */
+// What it takes to max every switched-on trainee: 5★, P5, and Lv3 hints on all four
+// potential skills. Owned trainees count unless switched off; unowned only when switched on.
+const invOn = u => { const v = root.inv.on[u.id]; return v == null ? !!root.umas[u.id] : !!v; };
+const invPool = () => UMAS.filter(u => avail(u) || jpOnly(u));
+function maxNeed(u) {
+  const o = root.umas[u.id];
+  const s0 = o ? o.s : u.r, p0 = o ? o.p : 1, h = (o && o.h) || [];
+  let shards = 0;
+  for (let i = s0 + 1; i <= 5; i++) shards += STAR_SHARDS[i];
+  const hint = {};
+  u.aw.forEach((sk, k) => hintCost(sk, h[k] || 0, HINT_MAX, hint));
+  return {shards, pot: potCost(u, p0, 5), hint};
+}
+function invTotals() {
+  const pot = {}, hint = {};
+  let shards = 0, shardsHave = 0, shardsShort = 0, n = 0;
+  for (const u of invPool()) {
+    if (!invOn(u)) continue;
+    n++;
+    const m = maxNeed(u), have = root.umas[u.id] ? (root.inv.shards[u.id] || 0) : 0;
+    for (const id in m.pot) pot[id] = (pot[id] || 0) + m.pot[id];
+    for (const id in m.hint) hint[id] = (hint[id] || 0) + m.hint[id];
+    // Shards belong to one trainee, so a surplus on one can't cover another.
+    shards += m.shards; shardsHave += have; shardsShort += Math.max(0, m.shards - have);
+  }
+  return {pot, hint, shards, shardsHave, shardsShort, n};
+}
+// Entry fields cover only items some listed trainee's potential costs actually use, so
+// leftovers in the data (old JP grade medals) don't show up.
+const INV_GROUPS = (() => {
+  const used = new Set();
+  UMAS.forEach(u => (D.talent[u.tg] || []).flat().forEach(([id]) => used.add(id)));
+  const ids = Object.keys(D.items).map(Number).filter(i => used.has(i)).sort((a, b) => a - b);
+  return [
+    ["Shoes", ids.filter(i => i <= 13)],
+    ["Sashes", ids.filter(i => i > 13 && i !== 44)],
+    ["Hints", [44, ...HINT_ITEMS].filter(i => D.items[i])],
+  ].filter(g => g[1].length);
+})();
+const invShort = id => (D.items[id] || String(id)).replace(/ Racing Shoes$/, "").replace(/ Winner's Sash$/, "");
+const invHave = id => root.plan.inv[id] || 0;
+VIEWS.inventory = () => {
+  view.innerHTML = `<div class="card scroll" id="invNeed"></div><div class="card" id="invEntry"></div><div class="card" id="invLeft"></div>`;
+  $("invEntry").innerHTML = INV_GROUPS.map(([g, ids]) => `<div class="head"${g === "Shoes" ? "" : ' style="margin-top:14px"'}>${g}</div>
+    <div class="fields igrid">${ids.map(id => `<div><label title="${esc(D.items[id])}">${esc(invShort(id))}</label>
+      <input type="number" min="0" data-act="invn" data-id="${id}" value="${invHave(id) || ""}"></div>`).join("")}</div>`).join("");
+  drawInv();
+};
+function drawInv() {
+  const t = invTotals();
+  const all = INV_GROUPS.flatMap(g => g[1]);
+  const ids = all.filter(id => t.pot[id] || t.hint[id] || invHave(id));
+  const n = v => v ? fN(v) : "";
+  const rows = (t.shards || t.shardsHave ? `<tr><td>Star shards</td><td class="num">${n(t.shards)}</td><td class="num"></td><td class="num"></td>
+      <td class="num gold">${n(t.shards)}</td><td class="num">${n(t.shardsHave)}</td></tr>` : "") +
+    ids.map(id => { const need = (t.pot[id] || 0) + (t.hint[id] || 0);
+      return `<tr><td>${esc(D.items[id] || id)}</td><td class="num"></td><td class="num">${n(t.pot[id])}</td><td class="num">${n(t.hint[id])}</td>
+        <td class="num gold">${n(need)}</td><td class="num">${n(invHave(id))}</td></tr>`; }).join("");
+  $("invNeed").innerHTML = `<div class="row" style="justify-content:space-between;align-items:center;margin-bottom:10px">
+      <div class="head" style="margin:0">Needed to max<span class="vbar">|</span>${t.n} trainees</div><button class="small" data-act="invtr">Trainees</button></div>
+    <table><thead><tr><th>Item</th><th class="num">Stars</th><th class="num">Potential</th><th class="num">Hints</th><th class="num">Total</th><th class="num">Owned</th></tr></thead>
+    <tbody>${rows || `<tr><td colspan="6" class="muted">—</td></tr>`}</tbody></table>`;
+  const left = (t.shardsShort ? [["Star shards", t.shardsShort]] : []).concat(all
+    .map(id => [D.items[id] || id, (t.pot[id] || 0) + (t.hint[id] || 0) - invHave(id)]).filter(([, v]) => v > 0));
+  $("invLeft").innerHTML = `<div class="head">Still needed</div>${left.length
+    ? `<div class="sgrid">${left.map(([nm, v]) => `<div class="srow"><span>${esc(nm)}</span><span class="gold mono">${fN(v)}</span></div>`).join("")}</div>`
+    : `<div class="muted">—</div>`}`;
+}
+// Trainee switchboard: owned first, then a rule, then everything not owned yet.
+function invTrainees() {
+  const row = u => {
+    const o = root.umas[u.id], m = maxNeed(u);
+    return `<tr data-q="${esc((u.n + " " + u.t).toLowerCase())}"><td class="ctr"><button class="tgl${invOn(u) ? " on" : ""}" data-act="ion" data-id="${u.id}" title="Include"></button></td>
+      <td>${uName(u)}</td><td class="num" style="white-space:nowrap">${o ? `${o.s}★ P${o.p}` : `${u.r}★`}</td><td class="num">${m.shards ? fN(m.shards) : ""}</td>
+      <td class="num">${o ? `<input class="mini" type="number" min="0" data-act="shv" data-id="${u.id}" value="${root.inv.shards[u.id] || ""}">` : ""}</td></tr>`;
+  };
+  const byName = (a, b) => a.n.localeCompare(b.n) || a.t.localeCompare(b.t);
+  const pool = invPool(), owned = pool.filter(u => root.umas[u.id]).sort(byName), un = pool.filter(u => !root.umas[u.id]).sort(byName);
+  const sec = (k, list) => `<tr class="sech"><td colspan="5"><span class="lbl" style="display:inline;margin-right:10px">${k === "own" ? "Owned" : "Not owned"} · ${list.length}</span>
+      <button class="small" data-act="ionall" data-sec="${k}" data-v="1">All on</button> <button class="small" data-act="ionall" data-sec="${k}" data-v="0">All off</button></td></tr>${list.map(row).join("")}`;
+  modal(`<div class="mtitle">Trainees</div><div class="msub">Included in Needed to max</div>
+    <input id="invq" placeholder="Search" style="max-width:260px;margin-bottom:8px">
+    <div class="scroll"><table class="invt"><thead><tr><th class="ctr">On</th><th>Trainee</th><th class="num">Now</th><th class="num">Shards</th><th class="num">Have</th></tr></thead>
+    <tbody>${sec("own", owned)}<tr class="hr"><td colspan="5"></td></tr>${sec("un", un)}</tbody></table></div>`);
+}
+
 /* ---------------- Planner ---------------- */
 VIEWS.planner = () => {
   view.innerHTML = `<div class="card"><label style="display:inline"><input type="checkbox" data-act="ponly"${root.plan.only ? " checked" : ""}>Targets only</label></div>
     <div class="card scroll" id="pU"></div><div class="card scroll" id="pI"></div><div class="card scroll" id="pS"></div><div class="card" id="pH"></div>`;
   drawPlanner();
 };
+// Owned trainee's potential skills with editable hint levels. A skill whose potential
+// level isn't reached yet is locked, as in the game.
+function hintTable(u, o) {
+  const h = o.h || [];
+  const rows = u.aw.map((sk, k) => {
+    const unlock = k + 2, lv = h[k] || 0, locked = o.p < unlock;
+    const left = hintCost(sk, lv, HINT_MAX);
+    const cost = Object.keys(left).sort((a, b) => a - b).map(id => `${esc(D.items[id] || id)} <span class="gold mono">${left[id]}</span>`).join(" · ");
+    return `<tr class="${locked ? "off" : ""}"><td class="mono">P${unlock}</td><td class="${skGold(sk) ? "gold" : ""}">${esc(skName(sk))}</td>
+      <td><select class="mini" data-act="uhint" data-id="${u.id}" data-k="${k}"${locked ? " disabled" : ""}>${opts([0,1,2,3].map(i => [i, "Lv" + i]), lv)}</select></td>
+      <td class="muted">${cost || "—"}</td></tr>`;
+  }).join("");
+  return `<div class="head" style="margin-top:16px">Potential skills</div>
+    <div class="scroll"><table><thead><tr><th>Unlock</th><th>Skill</th><th>Hint</th><th>To Lv3</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+}
 function potCost(u, from, to) {
   const tg = D.talent[u.tg] || [], need = {};
   for (let lv = from + 1; lv <= to; lv++) for (const [id, n] of (tg[lv - 2] || [])) need[id] = (need[id] || 0) + n;
@@ -959,6 +1083,17 @@ function onClick(e) {
   const deck = root.decks[i];
   switch (a) {
     case "uinfo": uInfo(UBY[id]); break;
+    case "invtr": invTrainees(); break;
+    case "ion": {
+      const u = UBY[id], on = !invOn(u);
+      root.inv.on[id] = on ? 1 : 0;
+      el.classList.toggle("on", on); save(); if (tab === "inventory") drawInv(); break;
+    }
+    case "ionall": {
+      const own = el.dataset.sec === "own", on = el.dataset.v === "1";
+      invPool().forEach(u => { if (!!root.umas[u.id] === own) root.inv.on[u.id] = on ? 1 : 0; });
+      save(); invTrainees(); if (tab === "inventory") drawInv(); break;
+    }
     case "utgt": if (root.tgt[id]) delete root.tgt[id]; else root.tgt[id] = 1; save(); drawTrainees(); break;
     case "sinfo": sInfo(SBY[id]); break;
     case "dnew": root.decks.push(normDeck({name: "Deck " + (root.decks.length + 1)})); save(); drawDecks(); break;
@@ -1026,6 +1161,13 @@ function onChange(e) {
       if (+v) { root.umas[id] = {s: +v, p: (root.umas[id] || {}).p || 1}; delete root.tgt[id]; } else delete root.umas[id];
       save(); drawTrainees(); break;
     case "upot": if (root.umas[id]) root.umas[id].p = +v; save(); break;
+    case "uhint": {
+      const o = root.umas[id];
+      if (!o) break;
+      o.h = (o.h || []).slice(0, 4); while (o.h.length < 4) o.h.push(0);
+      o.h[+el.dataset.k] = +v;
+      save(); uInfo(UBY[id]); if (tab === "inventory") drawInv(); break;
+    }
     case "slb":
       if (v === "") delete root.sups[id]; else root.sups[id] = {lb: +v};
       save(); drawSupports(); break;
@@ -1060,6 +1202,13 @@ function onInput(e) {
   if (el.id === "tq") { UI.tq = el.value; drawTrainees(); }
   else if (el.id === "sq") { UI.sq = el.value; drawSupports(); }
   else if (el.dataset.act === "dname") { root.decks[+el.dataset.i].name = el.value; save(); }
+  // Inventory counts update the tables live; the entry fields themselves are never redrawn.
+  else if (el.dataset.act === "invn") { root.plan.inv[el.dataset.id] = Math.max(0, Math.round(+el.value) || 0); save(); drawInv(); }
+  else if (el.dataset.act === "shv") { root.inv.shards[el.dataset.id] = Math.max(0, Math.round(+el.value) || 0); save(); if (tab === "inventory") drawInv(); }
+  else if (el.id === "invq") {
+    const q = el.value.trim().toLowerCase();
+    document.querySelectorAll("#modalcard tr[data-q]").forEach(tr => { tr.style.display = !q || tr.dataset.q.includes(q) ? "" : "none"; });
+  }
 }
 view.addEventListener("click", onClick);
 view.addEventListener("change", onChange);
@@ -1071,6 +1220,8 @@ document.addEventListener("click", e => {
   document.querySelectorAll("details.fgrp[open]").forEach(d => { if (!d.contains(e.target)) d.open = false; });
 });
 $("modalcard").addEventListener("click", onClick);
+$("modalcard").addEventListener("change", onChange);
+$("modalcard").addEventListener("input", onInput);
 window.addEventListener("hashchange", go);
 
 $("foot").innerHTML = `Umacalc ${VERSION}<span class="vbar">|</span>Data and images ${esc(D.built)} from <a href="https://gametora.com/umamusume" target="_blank" rel="noopener">GameTora</a><span class="vbar">|</span>Umamusume: Pretty Derby © Cygames, Inc. Unofficial fan tool.`;

@@ -6,6 +6,11 @@ Umamusume: Pretty Derby (Global). One `index.html` in the house style from
 
 ## To do
 
+- **Teams → Must include (requested 2026-10-17, for later).** Remove the style dropdown from pinned
+  trainees, so a pin locks the race only, and right-align the race dropdown in each pin row.
+  Saved pins that already have a style (`root.team.pins[].s`) should be cleared in `normalize()`
+  so they stop constraining the solver.
+
 - **Links (requested 2026-10-17, for later).** Make every skill name a link, everywhere skill
   names appear: trainee panel, Planner hint cells, deck hints, support card panel, Hint Sources.
   Link the trainee panel (and support card panel) to that trainee's or card's own page.

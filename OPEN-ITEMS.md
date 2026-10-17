@@ -37,8 +37,11 @@ Umamusume: Pretty Derby (Global). One `index.html` in the house style from
 - **Slot score** = 100 × the product of three aptitude multipliers (surface, distance, style:
   S 1.03, A 1, B 0.93, C 0.6, D 0.3) × 0.85 for each additional aptitude below A. A single B
   is cheap (one common spark), but several fixes compound: two Bs ≈ 0.74, three ≈ 0.58,
-  B + C ≈ 0.47. This was Steve's call on 2026-10-17. A small tiebreak comes from base stats
-  at the owned star level and from growth bonuses weighted per race. Aptitude dominates; stats
+  B + C ≈ 0.47. This was Steve's call on 2026-10-17. Stats add to that, weighted per race
+  (stamina counts 0 in Sprint and 1.2 in Long). Base stats at the owned star level add
+  (weighted average − 85) / 4, a light tiebreak. Growth adds weighted average % × 0.6, so a
+  fitting 20% bonus is worth about one B. It was doubled from 0.3 on 2026-10-17 because growth
+  multiplies every training gain, while base stats are a one-time head start. Aptitude dominates; stats
   only break ties. "Sparks" = grade steps short of A, summed (B = 1, C = 2).
 - **Prefer list:** +8 to that card's slots, about one B, so it wins any slot it is within
   8 points of. Teams are ranked by score plus that bonus. The displayed score never includes

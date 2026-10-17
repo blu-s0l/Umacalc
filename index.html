@@ -678,7 +678,9 @@ function slotFit(u, star, di, si, minG) {
   const ws = w.reduce((a, b) => a + b, 0);
   const stat = st.reduce((a, v, i) => a + v * w[i], 0) / ws;          // base stats at owned stars
   const grow = u.g.reduce((a, v, i) => a + v * w[i], 0) / ws;         // growth bonus %
-  const sc = 100 * m + (stat - 85) / 4 + grow * .3;
+  // Growth outweighs base stats: it multiplies every training gain for the whole career, so a
+  // fitting 20% bonus is worth about one B (~5 points). Base stats are a light tiebreak.
+  const sc = 100 * m + (stat - 85) / 4 + grow * .6;
   return {sc, g, sp};
 }
 function teamPool() {

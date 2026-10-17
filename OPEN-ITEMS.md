@@ -6,6 +6,13 @@ Umamusume: Pretty Derby (Global). One `index.html` in the house style from
 
 ## To do
 
+- **Links (requested 2026-10-17, for later).** Make every skill name a link, everywhere skill
+  names appear: trainee panel, Planner hint cells, deck hints, support card panel, Hint Sources.
+  Link the trainee panel (and support card panel) to that trainee's or card's own page.
+  Presumably GameTora (`gametora.com/umamusume/skills/<id>`, `/characters/<url_name>`,
+  `/supports/<url_name>`). Confirm the target site with Steve first. `data.js` doesn't carry
+  `url_name` yet; add it in `build_data.py`. Open in a new tab.
+
 - **Check the effect interpolation against the game.** `effAt()` interpolates linearly
   between GameTora's breakpoints (Lv 1, 5, 10 … 50) and floors. Effects with no value before
   their first breakpoint count as 0. One in-game check per rarity at LB1 or LB2 would settle it.

@@ -91,7 +91,7 @@ tr.sorted td{background:var(--bluebg)}
        align-items:center;justify-content:center;padding:20px}
 .modal.open{display:flex}
 .modalcard{background:var(--panel);border:1px solid var(--line2);border-radius:14px;
-           padding:18px 22px;max-width:880px;width:100%;max-height:86vh;overflow:auto}
+           padding:18px 22px;max-width:740px;width:100%;max-height:86vh;overflow:auto}
 
 .vbar{color:var(--gold);font-weight:700;padding:0 6px}
 
@@ -125,9 +125,13 @@ select:disabled:hover{border-color:var(--line2)}
 .kv{font-size:13px;color:var(--tx);margin-top:4px}
 table.cmp th,table.cmp td{padding-left:6px;padding-right:6px}
 table.cmp .gs{padding-left:16px}
-.tgl{padding:3px 10px;font-size:12px;color:var(--mut);border-color:var(--line2);border-radius:8px}
-.tgl.on{color:var(--blue);background:var(--bluebg);border-color:rgba(77,159,255,.3);font-weight:600}
-.tgl.on:hover{color:var(--blue);border-color:var(--blue)}
+/* target toggle: an empty ring, filled blue when on */
+.tgl{width:18px;height:18px;padding:0;border-radius:50%;border:1.5px solid var(--line2);background:var(--panel2);vertical-align:middle}
+.tgl:hover{border-color:var(--blue)}
+.tgl.on{border-color:var(--blue);background:var(--blue);box-shadow:inset 0 0 0 3px var(--panel2),0 0 0 3px var(--bluebg)}
+.row.fill>div{flex:1 1 auto}
+.row.fill table{width:100%}
+.jpt{font-family:var(--mono);font-size:10.5px;color:var(--sub);margin-left:4px}
 table.pot th.pl{text-align:center;border-bottom:1px solid var(--line)}
 table.pot td:nth-child(even),table.pot th.pl,table.pot tr:last-child th:nth-child(odd){padding-left:16px}
 label.ck{display:inline-flex;align-items:center;text-transform:none;letter-spacing:0;font-size:12.5px;font-weight:500;color:var(--tx);margin:0;cursor:pointer}
@@ -294,6 +298,22 @@ const UI = {tq: "", tOwn: "all", tSort: ["name", 1],
             team: null, teamIdx: 0, hq: ""};
 
 const avail = x => root.set.jp || (!!x.en && x.en <= TODAY);
+// Out in JP but not yet on Global: listed on Trainees so it can be targeted, never owned.
+const jpOnly = x => !avail(x) && !!x.jp && x.jp <= TODAY;
+
+// Global release estimate. Global works through JP's back catalogue faster than JP
+// released it (the gap was ~1580 days at launch and keeps shrinking), so fit Global
+// date against JP date over the last year of Global releases and extrapolate.
+const DAY = 86400000;
+const estGlobal = (() => {
+  const pts = UMAS.concat(SUPS).filter(x => x.en && x.jp && x.en <= TODAY).map(x => [Date.parse(x.jp), Date.parse(x.en)]);
+  const last = Math.max(...pts.map(p => p[1]));
+  const rec = pts.filter(p => p[1] >= last - 365 * DAY);
+  const mx = rec.reduce((a, p) => a + p[0], 0) / rec.length, my = rec.reduce((a, p) => a + p[1], 0) / rec.length;
+  const b = rec.reduce((a, p) => a + (p[0] - mx) * (p[1] - my), 0) / rec.reduce((a, p) => a + (p[0] - mx) ** 2, 0);
+  const floor = Date.parse(TODAY) + DAY;
+  return jp => new Date(Math.max(floor, my + b * (Date.parse(jp) - mx))).toISOString().slice(0, 10);
+})();
 
 /* ---------------- trainee helpers ---------------- */
 const uStats = (u, star) => u.s[star] || u.s[u.r];
@@ -308,7 +328,7 @@ const GROW = ["Sp", "St", "Po", "Gu", "Wi"];
 const growth = u => `<span class="grow">${u.g.map((v, i) => `<span><span class="gl">${GROW[i]}</span>${v ? `<span class="gold">${v}</span>` : `<span class="gz">–</span>`}</span>`).join("")}</span>`;
 // Potential items: shoes first, then sashes, then Dream Glimmer.
 const itemOrder = id => (+id <= 13 ? 0 : +id === 44 ? 2 : 1) * 1000 + +id;
-const uName = u => `<a class="nm" data-act="uinfo" data-id="${u.id}">${esc(u.n)}</a><div class="ttl">${esc(u.t)}</div>`;
+const uName = u => `<a class="nm" data-act="uinfo" data-id="${u.id}">${esc(u.n)}</a><div class="ttl">${esc(u.t)}${jpOnly(u) ? ` <span class="jpt">JP · est ${estGlobal(u.jp)}</span>` : ""}</div>`;
 
 /* ---------------- support helpers ---------------- */
 function effAt(arr, lv) {
@@ -396,7 +416,7 @@ VIEWS.trainees = () => {
   };
   view.innerHTML = `<div class="card"><div class="tfrow">
     <div style="width:220px"><label>Search</label><input id="tq" value="${esc(UI.tq)}" placeholder="Name or title"></div>
-    <div style="width:130px"><label>Show</label><select id="tOwn">${opts([["all","All"],["own","Owned"],["not","Not owned"],["tgt","Target"]], UI.tOwn)}</select></div>
+    <div style="width:130px"><label>Show</label><select id="tOwn">${opts([["all","All"],["own","Owned"],["not","Not owned"],["tgt","Target"],["jp","JP only"]], UI.tOwn)}</select></div>
   </div><div class="tfrow" style="margin-top:10px">${TF.map(grp).join("")}</div>
   <div class="hint" id="tCount"></div></div>
   <div class="card scroll" id="tTable"></div>`;
@@ -410,10 +430,11 @@ function drawTrainees() {
     const ok = f.on.map(i => GRADES.indexOf(u.a[i]) <= GRADES.indexOf(f.g));
     return f.any ? ok.some(Boolean) : ok.every(Boolean);
   });
-  let list = UMAS.filter(u => avail(u)
+  const show = u => UI.tOwn === "all" ? true : UI.tOwn === "tgt" ? !!root.tgt[u.id] : UI.tOwn === "jp" ? jpOnly(u)
+    : (UI.tOwn === "own") === !!root.umas[u.id];
+  let list = UMAS.filter(u => (avail(u) || jpOnly(u))
     && (!q || (u.n + " " + u.t).toLowerCase().includes(q))
-    && (UI.tOwn === "all" || (UI.tOwn === "tgt" ? !!root.tgt[u.id] : (UI.tOwn === "own") === !!root.umas[u.id]))
-    && passes(u));
+    && show(u) && passes(u));
   const [key, dir] = UI.tSort;
   const kv = u => {
     const st = uStats(u, uStar(u) || u.r);
@@ -431,9 +452,9 @@ function drawTrainees() {
     const starOpts = [["0", "—"]];
     for (let i = u.r; i <= 5; i++) starOpts.push([i, i + "★"]);
     return `<tr class="${o ? "" : "off"}"><td>${uName(u)}</td>
-      <td><select class="mini" data-act="ustar" data-id="${u.id}">${opts(starOpts, star)}</select></td>
+      <td><select class="mini" data-act="ustar" data-id="${u.id}"${jpOnly(u) ? " disabled" : ""}>${opts(starOpts, star)}</select></td>
       <td><select class="mini" data-act="upot" data-id="${u.id}"${o ? "" : " disabled"}>${opts([1,2,3,4,5].map(i => [i, "P" + i]), o ? o.p : 1)}</select></td>
-      <td class="ctr">${o ? "" : `<button class="tgl${root.tgt[u.id] ? " on" : ""}" data-act="utgt" data-id="${u.id}">Target</button>`}</td>
+      <td class="ctr">${o ? "" : `<button class="tgl${root.tgt[u.id] ? " on" : ""}" data-act="utgt" data-id="${u.id}" title="Target"></button>`}</td>
       ${st.map(v => `<td class="num">${v}</td>`).join("")}<td class="num">${st.reduce((a, b) => a + b, 0)}</td>
       <td class="mono">${growth(u)}</td>${aptTd(u, 0, 2)}${aptTd(u, 2, 6)}${aptTd(u, 6, 10)}</tr>`;
   }).join("");
@@ -462,19 +483,25 @@ function uInfo(u) {
   const GROW_FULL = ["Speed", "Stamina", "Power", "Guts", "Wit"];
   const APT_FULL = ["Turf", "Dirt", "Sprint", "Mile", "Medium", "Long", "Front", "Pace", "Late", "End"];
   const grpStart = i => i === 2 || i === 6 ? " gs" : "";      // first column of distance / style
-  const bnDates = u.b.map(([t, e]) => `<span class="gold">${day(t)}</span>${e ? " est" : ""}`).join(" · ");
+  const dates = list => list.map(t => `<span class="gold">${day(t)}</span>`).join(" · ");
+  // Not on Global yet: JP dates, labelled as such, plus the trend estimate.
+  const rel = jpOnly(u) || !u.en
+    ? `<div class="kv" style="margin-top:14px">JP release <span class="gold">${u.jp || "—"}</span></div>
+       ${u.bj.length ? `<div class="kv">JP banners ${dates(u.bj)}</div>` : ""}
+       ${u.jp ? `<div class="kv">Est. Global release <span class="gold">${estGlobal(u.jp)}</span></div>` : ""}`
+    : `<div class="kv" style="margin-top:14px">Global release <span class="gold">${u.en}</span></div>
+       ${u.b.some(b => !b[1]) ? `<div class="kv">Banners ${dates(u.b.filter(b => !b[1]).map(b => b[0]))}</div>` : ""}`;
   modal(`<div class="mtitle">${esc(u.n)}</div><div class="msub">${esc(u.t)}</div>
     <div class="kv" style="margin:-6px 0 12px">Unique <span class="gold">${esc(u.u ? skName(u.u) : "—")}</span></div>
     <div class="scroll"><table><thead><tr><th>Stars</th>${STAT.map(s => `<th class="num">${s}</th>`).join("")}<th class="num">Total</th></tr></thead><tbody>${rows}</tbody></table></div>
-    <div class="row" style="gap:20px;margin-top:12px;align-items:flex-start;flex-wrap:nowrap">
-      <div class="scroll"><table class="cmp" style="width:auto"><thead><tr>${APT_FULL.map((n, i) => `<th class="ctr${grpStart(i)}">${n}</th>`).join("")}</tr></thead>
+    <div class="row fill" style="gap:20px;margin-top:12px;align-items:flex-start;flex-wrap:nowrap">
+      <div class="scroll" style="flex-grow:2"><table class="cmp"><thead><tr>${APT_FULL.map((n, i) => `<th class="ctr${grpStart(i)}">${n}</th>`).join("")}</tr></thead>
         <tbody><tr>${[...u.a].map((g, i) => `<td class="ctr${grpStart(i)}">${gr(g)}</td>`).join("")}</tr></tbody></table></div>
-      <div class="scroll"><table class="cmp" style="width:auto"><thead><tr>${GROW_FULL.map(s => `<th class="num">${s}</th>`).join("")}</tr></thead>
+      <div class="scroll"><table class="cmp"><thead><tr>${GROW_FULL.map(s => `<th class="num">${s}</th>`).join("")}</tr></thead>
         <tbody><tr>${u.g.map(v => `<td class="num">${v ? `<span class="gold">${v}%</span>` : `<span class="gz">–</span>`}</td>`).join("")}</tr></tbody></table></div></div>
     ${pot ? `<div class="head" style="margin-top:16px">Potential<span class="vbar">|</span>Now P${cur}</div>
       <div class="scroll"><table class="pot"><thead>${potHead}</thead><tbody>${pot}</tbody></table></div>` : ""}
-    <div class="kv" style="margin-top:14px">${u.en ? `Global release <span class="gold">${u.en}</span>` : "JP only"}</div>
-    ${bnDates ? `<div class="kv">Banners ${bnDates}</div>` : ""}`);
+    ${rel}`);
 }
 
 /* ---------------- Supports ---------------- */

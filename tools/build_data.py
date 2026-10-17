@@ -48,7 +48,7 @@ def main(dl):
             "id": c["card_id"], "c": c["char_id"], "n": c["name_en"],
             "t": (c.get("title_en_gl") or "[" + c.get("title", "") + "]").strip("[]"),
             "r": c["rarity"], "a": "".join(c["aptitude"]), "s": st, "g": c["stat_bonus"],
-            "en": c.get("release_en"), "tg": c["talent_group"],
+            "en": c.get("release_en"), "jp": c.get("release"), "tg": c["talent_group"],
             "u": (c.get("skills_unique") or [None])[0],
         })
 
@@ -60,7 +60,7 @@ def main(dl):
         sups.append({
             "id": s["support_id"], "c": s["char_id"], "n": s["char_name"],
             "t": (s.get("title_en") or s.get("title_ja") or "").strip("[]"),
-            "r": s["rarity"], "ty": s["type"], "en": s.get("release_en"),
+            "r": s["rarity"], "ty": s["type"], "en": s.get("release_en"), "jp": s.get("release"),
             "ob": s.get("obtained"), "ef": ef,
             "u": {"lv": u["level"], "ef": [[x["type"], x["value"]] for x in u.get("effects", [])]} if u else None,
             "ud": s.get("unique_desc"),
@@ -75,14 +75,16 @@ def main(dl):
             s["b"] = sorted([x["start"], 1 if x.get("is_estimated") else 0]
                             for x in row["banners"].get("en", []))
 
-    uma_ban = {}
+    uma_ban, uma_ban_jp = {}, {}
     for row in raw["gacha/char_banners"]:
         cid = row.get("card_id") or row.get("char_card_id")
         if cid:
             uma_ban[cid] = sorted([x["start"], 1 if x.get("is_estimated") else 0]
                                   for x in row["banners"].get("en", []))
+            uma_ban_jp[cid] = sorted(x["start"] for x in row["banners"].get("ja", []))
     for u in umas:
         u["b"] = uma_ban.get(u["id"], [])
+        u["bj"] = uma_ban_jp.get(u["id"], [])
 
     used = set()
     for s in sups:

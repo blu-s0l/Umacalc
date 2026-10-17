@@ -25,6 +25,13 @@ Umamusume: Pretty Derby (Global). One `index.html` in the house style from
   `release_en <= today` at runtime, so new Global releases show up without editing code. Rebuild
   `data.js` only when GameTora adds new trainees or cards.
   `py -I tools/build_data.py <some-empty-download-dir>`
+- **JP-only trainees** (JP release ≤ today, not yet on Global) are listed on Trainees so they
+  can be targeted. They can't be owned unless Data → Include JP-only is on.
+- **Estimated Global release** (`estGlobal`) is a least-squares line of Global date against JP
+  date. It is fitted on the last 365 days of Global releases, trainees and cards together, and is
+  never earlier than tomorrow. Global covers about 1.35 JP days per day, so the gap shrinks. On
+  2026-10-17 it agreed with GameTora's own forecasts to within days near term and about a month
+  three years out.
 - **Team Trials model:** 5 races (Sprint, Mile, Medium, Long, Dirt = dirt mile) × 3 runners,
   one character once across the whole team, and no style repeated within a race.
 - **Slot score** = 100 × product of three aptitude multipliers (surface, distance, style:

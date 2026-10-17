@@ -131,7 +131,7 @@ table.cmp .gs{padding-left:16px}
 .tgl.on{border-color:var(--blue);background:var(--blue);box-shadow:inset 0 0 0 3px var(--panel2),0 0 0 3px var(--bluebg)}
 .row.fill>div{flex:1 1 auto}
 .row.fill table{width:100%}
-.jpt{font-family:var(--mono);font-size:10.5px;color:var(--sub);margin-left:4px}
+.jpt{font-family:var(--mono);font-size:10.5px;color:var(--sub)}
 table.pot th.pl{text-align:center;border-bottom:1px solid var(--line)}
 table.pot td:nth-child(even),table.pot th.pl,table.pot tr:last-child th:nth-child(odd){padding-left:16px}
 label.ck{display:inline-flex;align-items:center;text-transform:none;letter-spacing:0;font-size:12.5px;font-weight:500;color:var(--tx);margin:0;cursor:pointer}
@@ -328,7 +328,7 @@ const GROW = ["Sp", "St", "Po", "Gu", "Wi"];
 const growth = u => `<span class="grow">${u.g.map((v, i) => `<span><span class="gl">${GROW[i]}</span>${v ? `<span class="gold">${v}</span>` : `<span class="gz">–</span>`}</span>`).join("")}</span>`;
 // Potential items: shoes first, then sashes, then Dream Glimmer.
 const itemOrder = id => (+id <= 13 ? 0 : +id === 44 ? 2 : 1) * 1000 + +id;
-const uName = u => `<a class="nm" data-act="uinfo" data-id="${u.id}">${esc(u.n)}</a><div class="ttl">${esc(u.t)}${jpOnly(u) ? ` <span class="jpt">JP · est ${estGlobal(u.jp)}</span>` : ""}</div>`;
+const uName = u => `<a class="nm" data-act="uinfo" data-id="${u.id}">${esc(u.n)}</a><div class="ttl">${esc(u.t)}</div>${jpOnly(u) ? `<div class="jpt">JP · est ${estGlobal(u.jp)}</div>` : ""}`;
 
 /* ---------------- support helpers ---------------- */
 function effAt(arr, lv) {
@@ -440,7 +440,6 @@ function drawTrainees() {
     const st = uStats(u, uStar(u) || u.r);
     if (key === "name") return u.n + u.t;
     if (key === "star") return uStar(u);
-    if (key === "tot") return st.reduce((a, b) => a + b, 0);
     return st[+key];
   };
   list.sort((a, b) => { const x = kv(a), y = kv(b); return (x < y ? -1 : x > y ? 1 : 0) * dir; });
@@ -455,11 +454,11 @@ function drawTrainees() {
       <td><select class="mini" data-act="ustar" data-id="${u.id}"${jpOnly(u) ? " disabled" : ""}>${opts(starOpts, star)}</select></td>
       <td><select class="mini" data-act="upot" data-id="${u.id}"${o ? "" : " disabled"}>${opts([1,2,3,4,5].map(i => [i, "P" + i]), o ? o.p : 1)}</select></td>
       <td class="ctr">${o ? "" : `<button class="tgl${root.tgt[u.id] ? " on" : ""}" data-act="utgt" data-id="${u.id}" title="Target"></button>`}</td>
-      ${st.map(v => `<td class="num">${v}</td>`).join("")}<td class="num">${st.reduce((a, b) => a + b, 0)}</td>
+      ${st.map(v => `<td class="num">${v}</td>`).join("")}
       <td class="mono">${growth(u)}</td>${aptTd(u, 0, 2)}${aptTd(u, 2, 6)}${aptTd(u, 6, 10)}</tr>`;
   }).join("");
   $("tTable").innerHTML = `<table class="tt"><thead><tr>${th("name", "Trainee")}${th("star", "Stars")}<th>Potential</th><th class="ctr">Target</th>
-    ${STAT.map((s, i) => th(String(i), s, "num")).join("")}${th("tot", "Total", "num")}<th>Growth</th>${APT_TH}</tr></thead>
+    ${STAT.map((s, i) => th(String(i), s, "num")).join("")}<th>Growth</th>${APT_TH}</tr></thead>
     <tbody>${rows}</tbody></table>`;
 }
 function uInfo(u) {

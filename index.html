@@ -170,6 +170,9 @@ td.apt,th.apt{padding-left:4px;padding-right:4px;white-space:nowrap}
 .pinrow .nm{min-width:180px}
 .pinrow select{width:auto}
 .split{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.split3{display:grid;grid-template-columns:1.3fr 1fr 1fr;gap:18px}
+.split3 select{max-width:340px}
+@media(max-width:900px){.split3{grid-template-columns:1fr}}
 footer{margin-top:24px}
 @media(max-width:900px){.slots{grid-template-columns:repeat(3,minmax(0,1fr))}}
 @media(max-width:660px){.split{grid-template-columns:1fr}.wrap{padding:16px 12px 60px}.slots{grid-template-columns:repeat(2,minmax(0,1fr))}}
@@ -230,9 +233,15 @@ const DISTS = [
 ];
 const STYLES = [{n: "Front", i: 6}, {n: "Pace", i: 7}, {n: "Late", i: 8}, {n: "End", i: 9}];
 
-// How much a grade costs in the race, roughly. B is one spark from A, so it stays
-// usable; C needs two and is usually not worth building around.
-const GMULT = {S: 1.03, A: 1, B: .85, C: .6, D: .3, E: 0, F: 0, G: 0};
+// How much a grade costs, roughly as how hard it is to raise to A by inheritance.
+// One B is a single common spark away, so it's cheap; C needs the same aptitude raised
+// twice and is much harder.
+const GMULT = {S: 1.03, A: 1, B: .93, C: .6, D: .3, E: 0, F: 0, G: 0};
+// Every further aptitude that needs fixing costs this on top, because the parents then
+// have to carry several different sparks at once. Two Bs ≈ .74, three ≈ .58, B+C ≈ .47.
+const EXTRA_FIX = .85;
+// A preferred trainee wins a slot it is within this many points of; worth about one B.
+const PREF_BONUS = 8;
 
 // Rough per-unit value of each support effect, for ranking cards against each other.
 // Friendship and training effectiveness dominate; a flat stat bonus is worth a few points.
@@ -244,7 +253,7 @@ const EFF_PCT = new Set([1,2,8,15,16,18,25,26,27,28]);
 /* ---------------- state ---------------- */
 function blank() {
   return {schema: SCHEMA, umas: {}, tgt: {}, sups: {}, decks: [],
-          team: {pins: [], excl: [], minG: "B", alts: 8},
+          team: {pins: [], prefs: [], excl: [], minG: "B", alts: 8},
           plan: {umas: {}, sups: {}, inv: {}, skills: [], only: false},
           set: {jp: false}};
 }
@@ -659,6 +668,8 @@ function slotFit(u, star, di, si, minG) {
   const lim = GRADES.indexOf(minG);
   if (g.some(x => GRADES.indexOf(x) > lim)) return null;
   let m = g.reduce((p, x) => p * GMULT[x], 1);
+  const fixes = g.filter(x => GRADES.indexOf(x) > 1).length;
+  if (fixes > 1) m *= EXTRA_FIX ** (fixes - 1);
   // A pinned trainee (minG "G") is placed even on an unusable aptitude; it just scores near zero.
   if (m <= 0) { if (minG !== "G") return null; m = .05; }
   // Sparks: grade steps short of A, i.e. how much inheritance it takes to make the slot comfortable.
@@ -682,7 +693,7 @@ function teamPool() {
     if (!byChar.has(u.c)) byChar.set(u.c, []);
     byChar.get(u.c).push(u);
   }
-  return {byChar, pins};
+  return {byChar, pins, prefs: new Set(root.team.prefs)};
 }
 const PIN_BONUS = 1000;
 // Weighted bipartite assignment as min-cost flow:
@@ -701,13 +712,15 @@ function solveTeam(pool, ban) {
     const pin = pool.pins.get(c);
     for (let di = 0; di < 5; di++) for (let si = 0; si < 4; si++) {
       if (pin && ((pin.d != null && pin.d !== di) || (pin.s != null && pin.s !== si))) continue;
+      // Bonuses steer the solver only; the score shown and summed is f.sc.
       let best = null;
       for (const u of pool.byChar.get(c)) {
         const f = slotFit(u, uStar(u), di, si, pin ? "G" : root.team.minG);
-        if (f && (!best || f.sc > best.f.sc)) best = {u, f};
+        const w = f && f.sc + (pool.prefs.has(u.id) ? PREF_BONUS : 0);
+        if (f && (!best || w > best.w)) best = {u, f, w};
       }
       if (!best) continue;
-      add(1 + ci, 1 + C + di * 4 + si, 1, -(best.f.sc + (pin ? PIN_BONUS : 0)), {c, u: best.u, di, si, f: best.f});
+      add(1 + ci, 1 + C + di * 4 + si, 1, -(best.w + (pin ? PIN_BONUS : 0)), {c, u: best.u, di, si, f: best.f});
     }
   });
   for (let k = 0; k < NS; k++) add(1 + C + k, 1 + C + NS + Math.floor(k / 4), 1, 0, null);
@@ -733,7 +746,10 @@ function solveTeam(pool, ban) {
   members.sort((a, b) => a.di * 4 + a.si - (b.di * 4 + b.si));
   const score = members.reduce((a, m) => a + m.f.sc, 0);
   const sig = members.map(m => `${m.u.id}@${m.di}${m.si}`).join(",");
-  return {members, score, sig, sparks: members.reduce((a, m) => a + m.f.sp, 0)};
+  // Ranking counts preferences, so a team that keeps a preferred trainee outranks one that
+  // trades them away for a slightly higher raw score.
+  const rank = score + members.filter(m => pool.prefs.has(m.u.id)).length * PREF_BONUS;
+  return {members, score, rank, sig, sparks: members.reduce((a, m) => a + m.f.sp, 0)};
 }
 function buildTeams() {
   const pool = teamPool();
@@ -753,9 +769,9 @@ function buildTeams() {
   };
   // Alternatives: drop each member of the best team in turn, then do the same for the
   // three strongest of those, and rank everything that comes out.
-  const lvl1 = expand(best, new Set()).sort((a, b) => b.score - a.score);
+  const lvl1 = expand(best, new Set()).sort((a, b) => b.rank - a.rank);
   lvl1.slice(0, 3).forEach(t => expand(t, t.ban));
-  const teams = [...seen.values()].sort((a, b) => b.members.length - a.members.length || b.score - a.score);
+  const teams = [...seen.values()].sort((a, b) => b.members.length - a.members.length || b.rank - a.rank);
   return {teams: teams.slice(0, 1 + Math.max(0, root.team.alts)), pool};
 }
 VIEWS.teams = () => {
@@ -773,10 +789,11 @@ function drawTeamCtl() {
       <select class="mini" data-act="pins" data-i="${i}">${opts([["", "Any style"], ...STYLES.map((s, k) => [k, s.n])], p.s == null ? "" : p.s)}</select>
       <button class="x" data-act="pinx" data-i="${i}">×</button></div>`;
   }).join("");
-  const excl = root.team.excl.map((id, i) => UBY[id] ? `<div class="pinrow"><span class="nm">${esc(UBY[id].n)} <span class="ttl">${esc(UBY[id].t)}</span></span><button class="x" data-act="exx" data-i="${i}">×</button></div>` : "").join("");
-  $("teamCtl").innerHTML = `<div class="split">
-    <div><div class="head">Must include</div>${pins}<select data-act="pinadd" style="max-width:340px">${opts(uo, "")}</select></div>
-    <div><div class="head">Exclude</div>${excl}<select data-act="exadd" style="max-width:340px">${opts(uo, "")}</select></div></div>
+  const simple = (list, act) => list.map((id, i) => UBY[id] ? `<div class="pinrow"><span class="nm">${esc(UBY[id].n)} <span class="ttl">${esc(UBY[id].t)}</span></span><button class="x" data-act="${act}" data-i="${i}">×</button></div>` : "").join("");
+  $("teamCtl").innerHTML = `<div class="split3">
+    <div><div class="head">Must include</div>${pins}<select data-act="pinadd">${opts(uo, "")}</select></div>
+    <div><div class="head">Prefer</div>${simple(root.team.prefs, "prx")}<select data-act="pradd">${opts(uo, "")}</select></div>
+    <div><div class="head">Exclude</div>${simple(root.team.excl, "exx")}<select data-act="exadd">${opts(uo, "")}</select></div></div>
     <div class="row" style="margin-top:14px">
       <div style="width:150px"><label>Lowest aptitude</label><select data-act="ming">${opts([["A","A"],["B","B"],["C","C"]], root.team.minG)}</select></div>
       <div style="width:110px"><label>Alternatives</label><input type="number" min="0" max="30" data-act="alts" value="${root.team.alts}"></div>
@@ -807,7 +824,7 @@ function drawTeamOut() {
     ms.forEach(m => {
       body += `<tr><td>${STYLES[m.si].n}</td><td>${uName(m.u)}</td><td class="num">${uStar(m.u)}★</td>
         <td class="apt">${m.f.g.map(gr).join("")}</td><td class="num">${m.f.sp ? "+" + m.f.sp : ""}</td>
-        <td class="num gold">${f1(m.f.sc)}${pinned.has(m.c) ? " ⚑" : ""}</td><td class="bench">${bench(di, m.si)}</td></tr>`;
+        <td class="num gold">${f1(m.f.sc)}${pinned.has(m.c) ? " ⚑" : pool.prefs.has(m.u.id) ? " ♡" : ""}</td><td class="bench">${bench(di, m.si)}</td></tr>`;
     });
   });
   const best = teams[0];
@@ -950,6 +967,7 @@ function onClick(e) {
     case "ddel": if (confirm(`Delete ${deck.name}?`)) { root.decks.splice(i, 1); save(); drawDecks(); } break;
     case "pinx": root.team.pins.splice(i, 1); save(); drawTeamCtl(); break;
     case "exx": root.team.excl.splice(i, 1); save(); drawTeamCtl(); break;
+    case "prx": root.team.prefs.splice(i, 1); save(); drawTeamCtl(); break;
     case "build": UI.team = buildTeams(); UI.teamIdx = 0; drawTeamOut(); break;
     case "tview": UI.teamIdx = i; drawTeamOut(); break;
     case "hx": root.plan.skills.splice(i, 1); save(); drawHints(); break;
@@ -1017,6 +1035,7 @@ function onChange(e) {
     case "dq": deck.q[el.dataset.t] = Math.max(0, Math.min(5, +v || 0)); save(); break;
     case "pinadd": if (v && !root.team.pins.some(p => UBY[p.id].c === UBY[v].c)) root.team.pins.push({id: +v, d: null, s: null}); save(); drawTeamCtl(); break;
     case "exadd": if (v && !root.team.excl.includes(+v)) root.team.excl.push(+v); save(); drawTeamCtl(); break;
+    case "pradd": if (v && !root.team.prefs.includes(+v)) root.team.prefs.push(+v); save(); drawTeamCtl(); break;
     case "pind": root.team.pins[i].d = v === "" ? null : +v; save(); break;
     case "pins": root.team.pins[i].s = v === "" ? null : +v; save(); break;
     case "ming": root.team.minG = v; save(); break;

@@ -100,6 +100,13 @@ tr.sorted td{background:var(--bluebg)}
 .top{display:flex;align-items:center;gap:18px;flex-wrap:wrap;margin-bottom:16px}
 .brand{font-size:22px;font-weight:700;letter-spacing:-.02em}
 .brand span{color:var(--gold)}
+.totop{position:fixed;right:22px;bottom:22px;z-index:40;width:42px;height:42px;padding:0;border-radius:50%;
+       display:flex;align-items:center;justify-content:center;color:var(--blue);background:var(--panel2);
+       border:1px solid rgba(77,159,255,.45);box-shadow:0 6px 18px rgba(0,0,0,.45);
+       opacity:0;pointer-events:none;transform:translateY(8px);transition:opacity .2s,transform .2s}
+.totop.on{opacity:1;pointer-events:auto;transform:none}
+.totop:hover{background:var(--bluebg);border-color:var(--blue);color:var(--blue)}
+.brand .beta{font-style:normal;font-size:12px;font-weight:600;color:var(--mut);letter-spacing:.04em;vertical-align:middle}
 nav{display:flex;gap:4px;flex-wrap:wrap;flex:1}
 nav a.end{margin-left:auto}
 .tt .nm{font-size:14px}
@@ -214,7 +221,7 @@ footer{margin-top:24px}
 <body>
 <div class="wrap">
   <header class="top">
-    <div class="brand">Uma<span>calc</span></div>
+    <div class="brand">Uma<span>calc</span> <em class="beta">(BETA)</em></div>
     <nav id="nav"></nav>
   </header>
   <div id="banner"></div>
@@ -222,10 +229,11 @@ footer{margin-top:24px}
   <footer class="muted" id="foot"></footer>
 </div>
 <div class="modal" id="modal"><div class="modalcard" id="modalcard"></div></div>
+<button class="totop" id="totop" aria-label="Back to top"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M12 19V5M5 12l7-7 7 7" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
 <script src="data.js"></script>
 <script>
 "use strict";
-const VERSION = "0.1";
+const VERSION = "0.5";
 const D = window.UMA_DATA;
 const TODAY = new Date().toISOString().slice(0, 10);
 const NOW = Date.now() / 1000;
@@ -442,14 +450,20 @@ function banners(b) {
 }
 
 /* ---------------- nav / shell ---------------- */
-const TABS = [["trainees","Trainees"],["supports","Supports"],["decks","Decks"],["teams","Teams"],["aces","Aces"],["parents","Parents"],["planner","Planner"],["inventory","Inventory"],["data","Data"]];
+const TABS = [["trainees","Trainees"],["supports","Supports"],["decks","Decks"],["teams","Teams"],["aces","Aces"],["parents","Parents"],["planner","Planner"],["hints","Hint Sources"],["inventory","Inventory"],["data","Data"]];
 const VIEWS = {};
 let tab = "trainees";
+// Tabs that are scaffolding only: flagged so nobody plans around them yet.
+const WIP = new Set(["supports", "decks", "aces", "parents", "hints", "inventory"]);
+function show() {
+  VIEWS[tab]();
+  if (WIP.has(tab)) view.insertAdjacentHTML("afterbegin", `<div class="banner amber">Under construction · not for current use</div>`);
+}
 function go() {
   const h = location.hash.slice(1);
   tab = TABS.some(t => t[0] === h) ? h : "trainees";
   $("nav").innerHTML = TABS.map(([k, n]) => `<a href="#${k}" class="${k === tab ? "on" : ""}${k === "data" ? " end" : ""}">${n}</a>`).join("");
-  VIEWS[tab]();
+  show();
 }
 function drawBanner() {
   $("banner").innerHTML = (saveErr ? `<div class="banner red">${esc(saveErr)}</div>` : "") +
@@ -998,7 +1012,7 @@ function invTrainees() {
 /* ---------------- Planner ---------------- */
 VIEWS.planner = () => {
   view.innerHTML = `<div class="card"><label style="display:inline"><input type="checkbox" data-act="ponly"${root.plan.only ? " checked" : ""}>Targets only</label></div>
-    <div class="card scroll" id="pU"></div><div class="card scroll" id="pI"></div><div class="card scroll" id="pS"></div><div class="card" id="pH"></div>`;
+    <div class="card scroll" id="pU"></div><div class="card scroll" id="pI"></div><div class="card scroll" id="pS"></div>`;
   drawPlanner();
 };
 // A collapsible planner section; open unless the user closed it (root.plan.open).
@@ -1043,6 +1057,8 @@ function drawPlanner() {
   // Trainees: stars and potential on the first line, hint-level targets on the second,
   // and one Items cell spanning both with everything that trainee needs.
   const items = {};
+  // Shards are per trainee, so the total short is the sum of each trainee's own shortfall.
+  let shNeed = 0, shHave = 0, shLeft = 0;
   const urows = ownedUmas().sort((a, b) => a.n.localeCompare(b.n) || a.t.localeCompare(b.t)).map(u => {
     const o = root.umas[u.id], p = root.plan.umas[u.id] || {};
     const ts = Math.max(o.s, p.s || o.s), tp = Math.max(o.p, p.p || o.p);
@@ -1058,6 +1074,7 @@ function drawPlanner() {
         <select class="mini" data-act="puh" data-id="${u.id}" data-sk="${sk}"${open ? "" : " disabled"}>${opts(lo, t)}</select></div>`;
     }).join("");
     for (const id in need) items[id] = (items[id] || 0) + need[id];
+    if (shards) { const hv = root.inv.shards[u.id] || 0; shNeed += shards; shHave += hv; shLeft += Math.max(0, shards - hv); }
     if (only && ts === o.s && tp === o.p && !hinted) return "";
     const so = []; for (let i = o.s; i <= 5; i++) so.push([i, i + "★"]);
     const po = []; for (let i = o.p; i <= 5; i++) po.push([i, "P" + i]);
@@ -1082,9 +1099,12 @@ function drawPlanner() {
     <tbody>${urows || `<tr><td colspan="10" class="muted">—</td></tr>`}</tbody></table>`);
   // Items: shoes first, then sashes, then the rest.
   const ik = Object.keys(items).sort((a, b) => itemOrder(a) - itemOrder(b));
-  $("pI").innerHTML = sect("pI", "Items", `<table><thead><tr><th>Item</th><th class="num">Need</th><th class="num">Have</th><th class="num">Short</th></tr></thead><tbody>
-    ${ik.map(id => { const have = root.plan.inv[id] || 0, sh = items[id] - have;
-      return `<tr><td>${esc(D.items[id] || id)}</td><td class="num">${fN(items[id])}</td><td class="num"><input class="mini" type="number" min="0" data-act="pinv" data-id="${id}" value="${have || ""}"></td><td class="num ${sh > 0 ? "neg" : "pos"}">${sh > 0 ? fN(sh) : "0"}</td></tr>`; }).join("") || `<tr><td colspan="4" class="muted">—</td></tr>`}</tbody></table>`);
+  // Totals across every targeted trainee; Owned is editable here and shared with Inventory.
+  const shRow = shNeed ? `<tr><td>Star shards</td><td class="num">${fN(shNeed)}</td><td class="num">${shHave ? fN(shHave) : ""}</td><td class="num gold">${shLeft ? fN(shLeft) : ""}</td></tr>` : "";
+  $("pI").innerHTML = sect("pI", "Items", `<table><thead><tr><th>Item</th><th class="num">Need</th><th class="num">Owned</th><th class="num">Left</th></tr></thead><tbody>${shRow}
+    ${ik.map(id => { const have = root.plan.inv[id] || 0, sh = Math.max(0, items[id] - have);
+      return `<tr><td>${esc(D.items[id] || id)}</td><td class="num">${fN(items[id])}</td><td class="num"><input class="mini" type="number" min="0" data-act="pinv" data-id="${id}" value="${have || ""}"></td><td class="num gold">${sh ? fN(sh) : ""}</td></tr>`; }).join("")}
+    ${shRow || ik.length ? "" : `<tr><td colspan="4" class="muted">—</td></tr>`}</tbody></table>`);
   // Supports: limit breaks and levels.
   let totPts = 0, totCopies = 0;
   const srows = ownedSups().sort((a, b) => b.r - a.r || a.n.localeCompare(b.n)).map(s => {
@@ -1101,7 +1121,6 @@ function drawPlanner() {
   }).join("");
   $("pS").innerHTML = sect("pS", `Support cards<span class="vbar">|</span>Pts <span class="gold mono">${fN(totPts)}</span><span class="vbar">|</span>Copies <span class="gold mono">${totCopies}</span>`,
     `<table><thead><tr><th>Type</th><th>Card</th><th class="num">LB</th><th class="num">Lv</th><th>Target</th><th class="num">Lv</th><th class="num">Copies</th><th class="num">Pts</th></tr></thead><tbody>${srows || `<tr><td colspan="8" class="muted">—</td></tr>`}</tbody></table>`);
-  drawHints();
   alignPlanner();
 }
 function drawHints() {
@@ -1119,11 +1138,12 @@ function drawHints() {
       ${cards.map(c => `<tr class="${c.o ? "" : "off"}"><td><span class="ty">${RAR[c.s.r]} ${TYPE_LBL[c.s.ty]}</span></td><td>${sName(c.s)}</td><td>${c.via}</td>
         <td class="num">${c.o ? "LB" + c.o.lb : ""}</td><td class="mono">${c.s.en || "—"}</td><td class="mono">${c.bn.last}</td><td class="mono">${c.bn.next}</td></tr>`).join("")}</tbody></table></div></div>`;
   }).join("");
-  // Renamed from "Skill hints" now that the hint-level targets have that name.
-  $("pH").innerHTML = sect("pH", "Hint sources", `${blocks}
+  $("pH").innerHTML = `<div class="head">Hint sources</div>${blocks}
     <div class="row"><div style="width:320px"><input list="skl" id="hq" placeholder="Skill" value="${esc(UI.hq)}"></div><button class="small" data-act="hadd">Add</button></div>
-    <datalist id="skl">${names.map(([id, n]) => `<option value="${esc(n)}"></option>`).join("")}</datalist>`);
+    <datalist id="skl">${names.map(([id, n]) => `<option value="${esc(n)}"></option>`).join("")}</datalist>`;
 }
+// Its own tab for now (moved out of Planner).
+VIEWS.hints = () => { view.innerHTML = `<div class="card" id="pH"></div>`; drawHints(); };
 
 /* ---------------- Data ---------------- */
 VIEWS.data = () => {
@@ -1147,7 +1167,7 @@ $("modal").addEventListener("click", e => { if (e.target.id === "modal") $("moda
 document.addEventListener("keydown", e => { if (e.key === "Escape") $("modal").classList.remove("open"); });
 
 /* ---------------- events ---------------- */
-function redraw() { VIEWS[tab](); }
+function redraw() { show(); }
 function onClick(e) {
   const th = e.target.closest("th[data-sort]");
   if (th) {
@@ -1309,6 +1329,11 @@ $("modalcard").addEventListener("click", onClick);
 $("modalcard").addEventListener("change", onChange);
 $("modalcard").addEventListener("input", onInput);
 window.addEventListener("hashchange", go);
+// Back-to-top arrow: shown once the page has scrolled a screen's worth.
+const totop = $("totop");
+const syncTop = () => totop.classList.toggle("on", window.scrollY > window.innerHeight * .6);
+window.addEventListener("scroll", syncTop, {passive: true});
+totop.addEventListener("click", () => window.scrollTo({top: 0, behavior: "smooth"}));
 
 $("foot").innerHTML = `Umacalc ${VERSION}<span class="vbar">|</span>Data and images ${esc(D.built)} from <a href="https://gametora.com/umamusume" target="_blank" rel="noopener">GameTora</a><span class="vbar">|</span>Umamusume: Pretty Derby © Cygames, Inc. Unofficial fan tool.`;
 drawBanner();

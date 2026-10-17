@@ -183,11 +183,13 @@ table.sub td:first-child,table.sub th:first-child{padding-left:0;white-space:now
 table.sub th{padding-bottom:6px}
 /* the hint cells are fixed width so the trainee column can end exactly where the third begins */
 .hrow{display:flex;flex-wrap:wrap;gap:6px 10px}
-.hcell{display:flex;flex-direction:column;gap:2px;min-width:110px}
+/* justified: every cell grows from zero toward an equal share but never below its own name, so short names take the slack */
+.hcell{display:flex;flex-direction:column;gap:2px;flex:1 1 0;min-width:max-content}
+.hcell select{min-width:110px}
 .hcell.off{opacity:.45}
 .hcell .ttl{white-space:nowrap}
-/* the trainee column ends about where the third skill starts; the target columns shrink to fit and the filler column takes the slack */
-table.ptab td.pname{width:244px;min-width:244px;max-width:244px}
+/* the trainee column is as wide as the first listed trainee's first two skills (alignPlanner sets --pname), so Stars starts where its third skill does; the target columns shrink to fit and the filler column takes the slack */
+table.ptab td.pname{width:var(--pname,244px);min-width:var(--pname,244px);max-width:var(--pname,244px)}
 table.ptab .fit{width:1%;white-space:nowrap}
 table.ptab .fill{padding:0}
 /* collapsible planner sections: the card header is the toggle; collapsed drops only its trailing margin */
@@ -1021,6 +1023,17 @@ function potCost(u, from, to) {
   for (let lv = from + 1; lv <= to; lv++) for (const [id, n] of (tg[lv - 2] || [])) need[id] = (need[id] || 0) + n;
   return need;
 }
+// Stars starts where the first listed trainee's third skill does. Skill widths depend on
+// that trainee's names and on the window, so this is measured after layout, not computed.
+// The trainee column's width doesn't move the skills: the filler column absorbs the change.
+function alignPlanner() {
+  const tab = document.querySelector("table.ptab"), row = tab && tab.querySelector("tr.pu2 .hrow");
+  const third = row && row.children[2];
+  if (!third || !third.offsetWidth) return;      // section collapsed or under three skills
+  tab.style.setProperty("--pname", Math.round(third.getBoundingClientRect().left - row.getBoundingClientRect().left) + "px");
+}
+let alignTimer = 0;
+window.addEventListener("resize", () => { clearTimeout(alignTimer); alignTimer = setTimeout(alignPlanner, 80); });
 // The per-trainee items table and its header are separate tables; fixed number columns keep them aligned.
 // Short item names for the narrow per-trainee items table; the full name is the tooltip.
 const itemShort = id => (D.items[id] || String(id)).replace(/ Racing Shoes$/, " Shoes").replace(/ Winner's Sash$/, " Sash");
@@ -1089,6 +1102,7 @@ function drawPlanner() {
   $("pS").innerHTML = sect("pS", `Support cards<span class="vbar">|</span>Pts <span class="gold mono">${fN(totPts)}</span><span class="vbar">|</span>Copies <span class="gold mono">${totCopies}</span>`,
     `<table><thead><tr><th>Type</th><th>Card</th><th class="num">LB</th><th class="num">Lv</th><th>Target</th><th class="num">Lv</th><th class="num">Copies</th><th class="num">Pts</th></tr></thead><tbody>${srows || `<tr><td colspan="8" class="muted">—</td></tr>`}</tbody></table>`);
   drawHints();
+  alignPlanner();
 }
 function drawHints() {
   // Hint finder: every card that teaches a skill by hint or event, owned first, with banner dates.
@@ -1286,7 +1300,7 @@ view.addEventListener("input", onInput);
 // <details> toggle doesn't bubble; catch it on the way down to remember which filter groups are open.
 view.addEventListener("toggle", e => { const k = e.target.dataset && e.target.dataset.k; if (k && UI.tf[k]) UI.tf[k].open = e.target.open; }, true);
 // Remember which planner sections are collapsed.
-view.addEventListener("toggle", e => { const k = e.target.dataset && e.target.dataset.sec; if (k) { root.plan.open[k] = e.target.open; save(); } }, true);
+view.addEventListener("toggle", e => { const k = e.target.dataset && e.target.dataset.sec; if (k) { root.plan.open[k] = e.target.open; save(); if (k === "pU" && e.target.open) alignPlanner(); } }, true);
 // Filter drop-downs close on a click anywhere else, like a select would.
 document.addEventListener("click", e => {
   document.querySelectorAll("details.fgrp[open]").forEach(d => { if (!d.contains(e.target)) d.open = false; });

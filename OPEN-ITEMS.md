@@ -10,6 +10,14 @@ Umamusume: Pretty Derby (Global). One `index.html` in the house style from
   trainees, so a pin locks the race only, and right-align the race dropdown in each pin row.
   Saved pins that already have a style (`root.team.pins[].s`) should be cleared in `normalize()`
   so they stop constraining the solver.
+- **Aces in team building (requested 2026-10-17, for later).** Aces earn bonus points in Team
+  Trials. Any ace in Must include should be treated as that race's Ace and listed in the race's
+  first slot. Open questions:
+  - Where "ace" comes from: a flag on the pin, or the Aces tab, which is still a placeholder.
+  - One ace per race, or one for the whole team? Confirm the Global rule.
+  - How the bonus enters scoring. Probably weight the ace's slot score up, so the solver puts its
+    strongest fit in the ace slot and picks the ace's race and style with that in mind.
+  Get the actual bonus rule before choosing a weight.
 - **Teams legend (requested 2026-10-17, for later).** Put the ⚑ and ♡ markers used in the team
   table next to the "Must include" and "Prefer" headings, so new users can tell what they mean.
 

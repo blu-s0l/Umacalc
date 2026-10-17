@@ -37,6 +37,9 @@ Umamusume: Pretty Derby (Global). One `index.html` in the house style from
   shortfall; one trainee's surplus never covers another. Hint levels are stored on the owned
   trainee as `root.umas[id].h = {skillId: level}`, covering the 3 innate and 4 potential skills.
   A potential skill stays locked until its potential level is reached.
+- **Planner Filter** (`root.plan.show`): owned trainees are shown by default; trainees marked Target are
+  hidden until ticked. An unowned target plans from a fresh pull: base stars, P1, no hints, no
+  shards owned. This replaced the "Targets only" checkbox on 2026-10-17.
 - **JP-only trainees** (JP release ≤ today, not yet on Global) are listed on Trainees so they
   can be targeted. They can't be owned unless Data → Include JP-only is on.
 - **Estimated Global release** (`estGlobal`) is a least-squares line of Global date against JP

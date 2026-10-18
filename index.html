@@ -229,6 +229,16 @@ hr.rule{border:0;border-top:2px solid var(--line2);margin:14px 0 8px}
 .srow{display:flex;justify-content:space-between;gap:10px;padding:5px 2px;border-bottom:1px solid var(--line);font-size:12.5px}
 table.invt tr.sech td{padding-top:10px;border-bottom:1px solid var(--line2)}
 table.invt tr.hr td{padding:6px 0 0;border-bottom:2px solid var(--line2)}
+/* "i" helper: a small blue circle; its explanation appears above it on hover or focus */
+.tip{position:relative;display:inline-flex;align-items:center;justify-content:center;width:13px;height:13px;margin-left:4px;
+     border:1px solid rgba(77,159,255,.55);border-radius:50%;color:var(--blue);font:700 9px/1 var(--sans);text-transform:none;
+     letter-spacing:0;cursor:help;vertical-align:1px;outline:none}
+.tip:hover,.tip:focus{background:var(--bluebg);border-color:var(--blue)}
+.tip::after{content:attr(data-tip);position:absolute;left:-8px;bottom:calc(100% + 8px);z-index:60;width:240px;padding:8px 10px;
+     background:var(--panel2);border:1px solid var(--line2);border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.45);
+     color:var(--tx);font:400 12px/1.45 var(--sans);text-align:left;white-space:normal;
+     opacity:0;pointer-events:none;transform:translateY(4px);transition:opacity .12s,transform .12s}
+.tip:hover::after,.tip:focus::after{opacity:1;transform:none}
 .sfields{grid-template-columns:repeat(auto-fill,minmax(130px,150px))}
 table.swt{width:auto}
 table.swt td input{width:72px;padding:4px 6px;font-family:var(--mono);text-align:right}
@@ -270,7 +280,7 @@ footer{margin-top:24px}
 <script src="data.js"></script>
 <script>
 "use strict";
-const VERSION = "0.5";
+const VERSION = "0.7";
 const D = window.UMA_DATA;
 const TODAY = new Date().toISOString().slice(0, 10);
 const NOW = Date.now() / 1000;
@@ -1542,26 +1552,42 @@ function ttSave() {
 VIEWS.settings = () => {
   const c = cfg();
   const num = (path, v, step = ".01") => `<input type="number" step="${step}" min="0" data-cfg="${path}" value="${v}">`;
+  // "i" helpers: the explanation shows on hover (or keyboard focus), so the page itself stays terse.
+  const tip = t => ` <span class="tip" tabindex="0" data-tip="${esc(t)}">i</span>`;
+  const T = {
+    minG: "Worst grade a trainee can have in a slot's surface, distance or style and still be placed there. Must include trainees ignore it.",
+    alts: "How many alternative teams to list besides the best one. The No ace locks and Unrestricted comparisons are added on top.",
+    pref: "Points a Prefer trainee gets while the team is built, so they win any slot they're within this many points of. Never shown in scores.",
+    fix: "Extra multiplier for each aptitude below A after the first, so a slot needing several fixes costs more than one needing a single fix.",
+    grow: "Points per 1% of growth bonus, weighted by the race's stats. At 0.6 a fitting 20% bonus is worth about one B.",
+    base: "Points per base-stat point above 85 at your star level, weighted by the race's stats. A light tiebreak.",
+    skN: "Points for each of the trainee's own normal skills tied to the slot's distance, style or surface.",
+    skG: "Points for each of the trainee's own gold or unique skills tied to the slot's distance, style or surface.",
+    grade: "Multiplier on a slot's score for each of its three aptitudes: surface, distance and style. A is 1; anything below A costs points.",
+    w: "How much each stat counts in each race, for base stats and growth bonuses alike. Only the ratios within a row matter.",
+    ttN: "How many recent matches every Trials figure uses: averages, spread, the replace ranking and replacement reviews.",
+    ttRisk: "The replace order sorts by average − this × std dev. 0 ranks by average alone; higher values favour steadier trainees.",
+  };
   view.innerHTML = `<div class="card"><div class="head">Team building</div>
     <div class="fields sfields">
-      <div><label>Lowest aptitude</label><select data-act="ming">${opts([..."ABCDEFG"].map(g => [g, g]), root.team.minG)}</select></div>
-      <div><label>Alternatives</label><input type="number" min="0" max="30" data-act="alts" value="${root.team.alts}"></div>
-      <div><label>Prefer bonus</label>${num("pref", c.pref, "1")}</div>
-      <div><label>Each extra fix ×</label>${num("fix", c.fix)}</div>
-      <div><label>Growth weight</label>${num("grow", c.grow)}</div>
-      <div><label>Base stat weight</label>${num("base", c.base)}</div>
-      <div><label>Skill match</label>${num("skN", c.skN)}</div>
-      <div><label>Gold skill match</label>${num("skG", c.skG)}</div>
+      <div><label>Lowest aptitude${tip(T.minG)}</label><select data-act="ming">${opts([..."ABCDEFG"].map(g => [g, g]), root.team.minG)}</select></div>
+      <div><label>Alternatives${tip(T.alts)}</label><input type="number" min="0" max="30" data-act="alts" value="${root.team.alts}"></div>
+      <div><label>Prefer bonus${tip(T.pref)}</label>${num("pref", c.pref, "1")}</div>
+      <div><label>Each extra fix ×${tip(T.fix)}</label>${num("fix", c.fix)}</div>
+      <div><label>Growth weight${tip(T.grow)}</label>${num("grow", c.grow)}</div>
+      <div><label>Base stat weight${tip(T.base)}</label>${num("base", c.base)}</div>
+      <div><label>Skill match${tip(T.skN)}</label>${num("skN", c.skN)}</div>
+      <div><label>Gold skill match${tip(T.skG)}</label>${num("skG", c.skG)}</div>
     </div>
-    <div class="head" style="margin-top:16px">Aptitude grade ×</div>
+    <div class="head" style="margin-top:16px">Aptitude grade ×${tip(T.grade)}</div>
     <div class="fields sfields">${[..."SABCDEFG"].map(g => `<div><label>${g}</label>${num("g." + g, c.g[g])}</div>`).join("")}</div>
-    <div class="head" style="margin-top:16px">Stat weights</div>
+    <div class="head" style="margin-top:16px">Stat weights${tip(T.w)}</div>
     <div class="scroll"><table class="swt"><thead><tr><th>Race</th>${STAT.map(s => `<th class="num">${s}</th>`).join("")}</tr></thead><tbody>
       ${DISTS.map((d, di) => `<tr><td>${d.n}</td>${c.w[di].map((v, i) => `<td>${num(`w.${di}.${i}`, v)}</td>`).join("")}</tr>`).join("")}</tbody></table></div>
     <div class="head" style="margin-top:16px">Trials</div>
     <div class="fields sfields">
-      <div><label>Matches averaged</label>${num("ttN", c.ttN, "1")}</div>
-      <div><label>Consistency weight</label>${num("ttRisk", c.ttRisk)}</div>
+      <div><label>Matches averaged${tip(T.ttN)}</label>${num("ttN", c.ttN, "1")}</div>
+      <div><label>Consistency weight${tip(T.ttRisk)}</label>${num("ttRisk", c.ttRisk)}</div>
     </div>
     <div class="row" style="margin-top:14px"><button class="small" data-act="cfgreset">Defaults</button></div></div>`;
 };

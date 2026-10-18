@@ -95,7 +95,7 @@ Umamusume: Pretty Derby (Global). One `index.html` in the house style from
 - **Team Trials model:** 5 races (Sprint, Mile, Medium, Long, Dirt = dirt mile) × 3 runners,
   one character once across the whole team, and no style repeated within a race.
 - **Slot score** = 100 × the product of three aptitude multipliers (surface, distance, style:
-  S 1.03, A 1, B 0.93, C 0.6, D 0.3) × 0.85 for each additional aptitude below A. A single B
+  S 1.03, A 1, B 0.93, C 0.6, D 0.3, E 0.1, F 0.05, G 0.02) × 0.85 for each additional aptitude below A. Lowest aptitude goes down to G (2026-10-18). A single B
   is cheap (one common spark), but several fixes compound: two Bs ≈ 0.74, three ≈ 0.58,
   B + C ≈ 0.47. This was Steve's call on 2026-10-17. Stats add to that, weighted per race
   (stamina counts 0 in Sprint and 1.2 in Long; wit gets +0.2 in every race, 2026-10-17, because skill activation runs on wit and Team Trials points come mostly from skills). Base stats at the owned star level add

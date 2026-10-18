@@ -317,7 +317,8 @@ const STYLES = [{n: "Front", i: 6}, {n: "Pace", i: 7}, {n: "Late", i: 8}, {n: "E
 
 // Team-building settings, editable on the Settings tab (root.cfg). The defaults and why:
 // - g: grade factor, roughly how hard a grade is to raise to A by inheritance. One B is a single
-//   common spark away, so it's cheap; C needs the same aptitude raised twice. E–G are always 0.
+//   common spark away, so it's cheap; C needs the same aptitude raised twice. D–G are next to unusable; they only matter when
+//   Lowest aptitude is set that low or for a pinned trainee.
 // - fix: every further aptitude below A costs this on top, because the parents then have to carry
 //   several different sparks at once. Two Bs ≈ .74, three ≈ .58, B+C ≈ .47.
 // - pref: a preferred trainee wins a slot it is within this many points of; about one B.
@@ -326,7 +327,7 @@ const STYLES = [{n: "Front", i: 6}, {n: "Pace", i: 7}, {n: "Late", i: 8}, {n: "E
 // - w: per-race stat weights [Spd, Sta, Pow, Gut, Wit] (see DISTS).
 // - skN / skG: points per own skill tied to the slot's distance, style or surface (normal / gold or
 //   unique). A trainee with two Mile skills scores a few points more in Mile; about a B at most.
-const CFG_DEF = {g: {S: 1.03, A: 1, B: .93, C: .6, D: .3}, fix: .85, pref: 8, grow: .6, base: .25, skN: 1.5, skG: 3,
+const CFG_DEF = {g: {S: 1.03, A: 1, B: .93, C: .6, D: .3, E: .1, F: .05, G: .02}, fix: .85, pref: 8, grow: .6, base: .25, skN: 1.5, skG: 3,
                  w: DISTS.map(d => d.w.slice())};
 const cfg = () => root.cfg;
 function cfgNorm(c) {
@@ -997,7 +998,7 @@ function drawTeamCtl() {
     <div><div class="head">Prefer <span class="gold">♡</span></div>${simple(root.team.prefs, "prx")}<select data-act="pradd">${opts(uo, "")}</select></div>
     <div><div class="head">Exclude</div>${simple(root.team.excl, "exx")}<select data-act="exadd">${opts(uo, "")}</select></div></div>
     <div class="row" style="margin-top:14px">
-      <div style="width:150px"><label>Lowest aptitude</label><select data-act="ming">${opts([["A","A"],["B","B"],["C","C"]], root.team.minG)}</select></div>
+      <div style="width:150px"><label>Lowest aptitude</label><select data-act="ming">${opts([..."ABCDEFG"].map(g => [g, g]), root.team.minG)}</select></div>
       <div style="width:110px"><label>Alternatives</label><input type="number" min="0" max="30" data-act="alts" value="${root.team.alts}"></div>
       <button class="primary" data-act="build">Build team</button>
       <span class="muted">${owned.length} owned</span></div>`;
@@ -1304,7 +1305,7 @@ VIEWS.settings = () => {
   const num = (path, v, step = ".01") => `<input type="number" step="${step}" min="0" data-cfg="${path}" value="${v}">`;
   view.innerHTML = `<div class="card"><div class="head">Team building</div>
     <div class="fields sfields">
-      <div><label>Lowest aptitude</label><select data-act="ming">${opts([["A","A"],["B","B"],["C","C"]], root.team.minG)}</select></div>
+      <div><label>Lowest aptitude</label><select data-act="ming">${opts([..."ABCDEFG"].map(g => [g, g]), root.team.minG)}</select></div>
       <div><label>Alternatives</label><input type="number" min="0" max="30" data-act="alts" value="${root.team.alts}"></div>
       <div><label>Prefer bonus</label>${num("pref", c.pref, "1")}</div>
       <div><label>Each extra fix ×</label>${num("fix", c.fix)}</div>
@@ -1314,7 +1315,7 @@ VIEWS.settings = () => {
       <div><label>Gold skill match</label>${num("skG", c.skG)}</div>
     </div>
     <div class="head" style="margin-top:16px">Aptitude grade ×</div>
-    <div class="fields sfields">${["S", "A", "B", "C", "D"].map(g => `<div><label>${g}</label>${num("g." + g, c.g[g])}</div>`).join("")}</div>
+    <div class="fields sfields">${[..."SABCDEFG"].map(g => `<div><label>${g}</label>${num("g." + g, c.g[g])}</div>`).join("")}</div>
     <div class="head" style="margin-top:16px">Stat weights</div>
     <div class="scroll"><table class="swt"><thead><tr><th>Race</th>${STAT.map(s => `<th class="num">${s}</th>`).join("")}</tr></thead><tbody>
       ${DISTS.map((d, di) => `<tr><td>${d.n}</td>${c.w[di].map((v, i) => `<td>${num(`w.${di}.${i}`, v)}</td>`).join("")}</tr>`).join("")}</tbody></table></div>

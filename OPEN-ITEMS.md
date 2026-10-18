@@ -6,6 +6,10 @@ Umamusume: Pretty Derby (Global). One `index.html` in the house style from
 
 ## To do
 
+- **Remove the temporary Trials seed when Steve says.** It's `SEED_TT`, `seedTT()` and the
+  startup line marked TEMPORARY, added 2026-10-18. It loads his sheet's 15 TT matches once into
+  an empty log so they get into his browser's storage. The `seeded` flag can stay.
+
 - **Skill links.** Trainee and card panels now link to their GameTora pages. Skill names
   aren't linked: GameTora has no page per skill, and its skills list can't be opened at a given
   skill by link. Options to put to Steve: an in-app skill pop-up (description from `skills.json`,

@@ -43,6 +43,17 @@ Umamusume: Pretty Derby (Global). One `index.html` in the house style from
     On spread them to ace all 5 races, at a cost of 13.7 points (1584.6 vs 1598.3).
   - **Why two stages and not one flow:** pinned and unpinned runners merge at the shared style
     slot, so a single min-cost flow can't count pinned aces per race.
+- **Skills in the slot score** (2026-10-18). `build_data.py` tags each skill with the distances,
+  styles and surfaces its activation conditions name (equality tests only; groups are combined).
+  `skillFit()` adds +1.5 for each normal and +3 for each gold or unique skill tied to the slot.
+  It counts the unique skill, the innate skills, and potential skills already unlocked at the
+  trainee's potential level. Skills that work anywhere don't count. Dirt counts as a mile on
+  dirt. Example: Quercus Civilis Air Groove at P5, Mile Pace, gets 4 skills for +7.5, about one
+  B. The team table's Skills column shows the count, with skill names on hover. Points are
+  editable in Settings.
+- **Trainees → Show** is a checkbox group (Owned, Not owned, Target, JP only). Ticked categories
+  are combined with OR, so a trainee shows if it matches any of them, and nothing ticked shows
+  everyone. This replaced the dropdown on 2026-10-18.
 - **Settings tab** (`root.cfg`, defaults in `CFG_DEF`, shape repaired by `cfgNorm`). It holds
   every team-building value: grade factors S–D, extra-fix ×, Prefer bonus, growth and base-stat
   weights, the per-race stat weights, Force ace, plus Lowest aptitude and Alternatives (mirrored

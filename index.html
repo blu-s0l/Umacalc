@@ -322,8 +322,10 @@ const STYLES = [{n: "Front", i: 6}, {n: "Pace", i: 7}, {n: "Late", i: 8}, {n: "E
 // - grow / base: weight of growth % and of base stats. Growth multiplies every training gain for
 //   the whole career, so a fitting 20% is worth about one B; base stats are a light tiebreak.
 // - w: per-race stat weights [Spd, Sta, Pow, Gut, Wit] (see DISTS).
+// - skN / skG: points per own skill tied to the slot's distance, style or surface (normal / gold or
+//   unique). A trainee with two Mile skills scores a few points more in Mile; about a B at most.
 // - forceAce: give as many Must include trainees as possible a race of their own as its ace.
-const CFG_DEF = {g: {S: 1.03, A: 1, B: .93, C: .6, D: .3}, fix: .85, pref: 8, grow: .6, base: .25,
+const CFG_DEF = {g: {S: 1.03, A: 1, B: .93, C: .6, D: .3}, fix: .85, pref: 8, grow: .6, base: .25, skN: 1.5, skG: 3,
                  forceAce: true, w: DISTS.map(d => d.w.slice())};
 const cfg = () => root.cfg;
 function cfgNorm(c) {
@@ -331,7 +333,7 @@ function cfgNorm(c) {
   if (!c || typeof c !== "object") return d;
   const num = (v, def) => typeof v === "number" && isFinite(v) && v >= 0 ? v : def;
   for (const g in d.g) d.g[g] = num(c.g && c.g[g], d.g[g]);
-  for (const k of ["fix", "pref", "grow", "base"]) d[k] = num(c[k], d[k]);
+  for (const k of ["fix", "pref", "grow", "base", "skN", "skG"]) d[k] = num(c[k], d[k]);
   if (typeof c.forceAce === "boolean") d.forceAce = c.forceAce;
   d.w = d.w.map((row, di) => row.map((v, i) => num(c.w && c.w[di] && c.w[di][i], v)));
   return d;
@@ -404,10 +406,11 @@ function save() {
   }
 }
 let root = load();
-const UI = {tq: "", tOwn: "all", tSort: ["name", 1],
+const UI = {tq: "", tShow: [], tSort: ["name", 1],
             tf: {surf: {on: [], g: "A", any: false, open: false},
                  dist: {on: [], g: "A", any: false, open: false},
-                 sty:  {on: [], g: "A", any: false, open: false}},
+                 sty:  {on: [], g: "A", any: false, open: false},
+                 show: {open: false}},
             sq: "", sType: "", sRar: "", sOwn: "all", sSort: ["score", -1],
             team: null, teamIdx: 0, hq: ""};
 
@@ -529,6 +532,12 @@ const tfSum = g => {
   if (!f.on.length) return "";
   return g.items.filter(([, i]) => f.on.includes(i)).map(([n]) => n).join(f.any ? " / " : " + ") + " " + f.g + "+";
 };
+// Show categories overlap on purpose (a JP-only trainee is also Not owned); ticked ones are OR'd.
+const SHOW = {own: u => !!root.umas[u.id], not: u => !root.umas[u.id], tgt: u => !!root.tgt[u.id], jp: u => jpOnly(u)};
+const SHOW_L = [["own", "Owned"], ["not", "Not owned"], ["tgt", "Target"], ["jp", "JP only"]];
+const showSum = () => SHOW_L.filter(([k]) => UI.tShow.includes(k)).map(([, n]) => n).join(" / ");
+const showGrp = () => `<details class="fgrp" data-k="show"${UI.tf.show.open ? " open" : ""}><summary>Show <span class="gold" id="tfs-show">${esc(showSum())}</span></summary>
+  <div class="fpop"><div class="fbody">${SHOW_L.map(([k, n]) => `<label class="ck"><input type="checkbox" data-tshow="${k}"${UI.tShow.includes(k) ? " checked" : ""}>${n}</label>`).join("")}</div></div></details>`;
 VIEWS.trainees = () => {
   const grp = g => {
     const f = UI.tf[g.k];
@@ -540,7 +549,7 @@ VIEWS.trainees = () => {
   };
   view.innerHTML = `<div class="card"><div class="tfrow">
     <div style="width:220px"><label>Search</label><input id="tq" value="${esc(UI.tq)}" placeholder="Name or title"></div>
-    <div style="width:130px"><label>Show</label><select id="tOwn">${opts([["all","All"],["own","Owned"],["not","Not owned"],["tgt","Target"],["jp","JP only"]], UI.tOwn)}</select></div>
+    ${showGrp()}
   </div><div class="tfrow" style="margin-top:10px">${TF.map(grp).join("")}</div>
   <div class="hint" id="tCount"></div></div>
   <div class="card scroll" id="tTable"></div>`;
@@ -554,8 +563,8 @@ function drawTrainees() {
     const ok = f.on.map(i => GRADES.indexOf(u.a[i]) <= GRADES.indexOf(f.g));
     return f.any ? ok.some(Boolean) : ok.every(Boolean);
   });
-  const show = u => UI.tOwn === "all" ? true : UI.tOwn === "tgt" ? !!root.tgt[u.id] : UI.tOwn === "jp" ? jpOnly(u)
-    : (UI.tOwn === "own") === !!root.umas[u.id];
+  // Show: any ticked category matches (Owned, Not owned, Target, JP only); none ticked = everyone.
+  const show = u => !UI.tShow.length || UI.tShow.some(k => SHOW[k](u));
   let list = UMAS.filter(u => (avail(u) || jpOnly(u))
     && (!q || (u.n + " " + u.t).toLowerCase().includes(q))
     && show(u) && passes(u));
@@ -792,8 +801,28 @@ function slotFit(u, star, di, si, minG) {
   const ws = w.reduce((a, b) => a + b, 0) || 1;                        // all-zero weights: no stat term
   const stat = st.reduce((a, v, i) => a + v * w[i], 0) / ws;          // base stats at owned stars
   const grow = u.g.reduce((a, v, i) => a + v * w[i], 0) / ws;         // growth bonus %
-  const sc = 100 * m + (stat - 85) * c.base + grow * c.grow;
-  return {sc, g, sp};
+  const sk = skillFit(u, di, si);
+  const sc = 100 * m + (stat - 85) * c.base + grow * c.grow + sk.pts;
+  return {sc, g, sp, sk: sk.hit};
+}
+// Skills that favour a slot: the trainee's unique and innate skills plus the potential skills its
+// potential level has unlocked. A skill counts only when it names a distance, style or surface
+// and the slot has it; skills that work anywhere don't move anyone between slots.
+function skillFit(u, di, si) {
+  const c = cfg(), o = root.umas[u.id], pot = o ? o.p : 1;
+  const dist = di < 4 ? di + 1 : 2, ground = di === 4 ? 2 : 1, style = si + 1;   // Dirt runs a mile
+  let pts = 0;
+  const hit = [];
+  for (const id of [u.u, ...u.in, ...u.aw.filter((_, k) => pot >= k + 2)]) {
+    const s = id && D.skills[id];
+    if (!s) continue;
+    const [, rar, ds = [], ss = [], gs = []] = s;
+    if (!ds.length && !ss.length && !gs.length) continue;
+    if ((ds.length && !ds.includes(dist)) || (ss.length && !ss.includes(style)) || (gs.length && !gs.includes(ground))) continue;
+    pts += rar >= 2 ? c.skG : c.skN;
+    hit.push(id);
+  }
+  return {pts, hit};
 }
 function teamPool() {
   const pins = new Map();
@@ -985,10 +1014,10 @@ function drawTeamOut() {
     }
     if (!ace) ace = top(ms);
     const order = ace ? [ace, ...ms.filter(m => m !== ace)] : ms;
-    body += `<tr><td class="dh" colspan="7">${d.n}${d.n === "Dirt" ? " · Mile" : ""}<span class="muted" style="letter-spacing:0;text-transform:none;font-weight:400"> ${ms.length}/3</span></td></tr>`;
+    body += `<tr><td class="dh" colspan="8">${d.n}${d.n === "Dirt" ? " · Mile" : ""}<span class="muted" style="letter-spacing:0;text-transform:none;font-weight:400"> ${ms.length}/3</span></td></tr>`;
     order.forEach(m => {
       body += `<tr><td>${STYLES[m.si].n}${m === ace ? ` <span class="ace">Ace</span>` : ""}</td><td>${uName(m.u)}</td><td class="num">${uStar(m.u)}★</td>
-        <td class="apt">${m.f.g.map(gr).join("")}</td><td class="num">${m.f.sp ? "+" + m.f.sp : ""}</td>
+        <td class="apt">${m.f.g.map(gr).join("")}</td><td class="num">${m.f.sp ? "+" + m.f.sp : ""}</td><td class="num"${m.f.sk.length ? ` title="${esc(m.f.sk.map(skName).join(", "))}"` : ""}>${m.f.sk.length || ""}</td>
         <td class="num gold">${f1(m.f.sc)}${pinned.has(m.c) ? " ⚑" : pool.prefs.has(m.u.id) ? " ♡" : ""}</td><td class="bench">${bench(di, m.si)}</td></tr>`;
     });
   });
@@ -1006,7 +1035,7 @@ function drawTeamOut() {
     <td><button class="small" data-act="tview" data-i="${i}"${i === UI.teamIdx ? " disabled" : ""}>View</button></td></tr>`).join("");
   $("teamOut").innerHTML = `<div class="calbox"><div class="calans">${f1(t.score)}</div>
     <div class="calsub">Team <b>${UI.teamIdx + 1}</b> of ${teams.length}<span class="vbar">|</span><b>${t.members.length}</b>/15<span class="vbar">|</span>Sparks <b>${t.sparks}</b></div></div>
-    <div class="card scroll"><table class="dist"><thead><tr><th>Style</th><th>Trainee</th><th class="num">Stars</th><th class="apt"><span>Sf</span><span>Ds</span><span>St</span></th><th class="num">Sparks</th><th class="num">Score</th><th>Bench</th></tr></thead><tbody>${body}</tbody></table></div>
+    <div class="card scroll"><table class="dist"><thead><tr><th>Style</th><th>Trainee</th><th class="num">Stars</th><th class="apt"><span>Sf</span><span>Ds</span><span>St</span></th><th class="num">Sparks</th><th class="num">Skills</th><th class="num">Score</th><th>Bench</th></tr></thead><tbody>${body}</tbody></table></div>
     <div class="card scroll"><div class="head">Ranked</div><table><thead><tr><th class="num">#</th><th class="num">Score</th><th class="num">Δ</th><th class="num">Size</th><th class="num">Sparks</th><th>vs best</th><th></th></tr></thead><tbody>${alts}</tbody></table></div>`;
 }
 
@@ -1262,6 +1291,8 @@ VIEWS.settings = () => {
       <div><label>Each extra fix ×</label>${num("fix", c.fix)}</div>
       <div><label>Growth weight</label>${num("grow", c.grow)}</div>
       <div><label>Base stat weight</label>${num("base", c.base)}</div>
+      <div><label>Skill match</label>${num("skN", c.skN)}</div>
+      <div><label>Gold skill match</label>${num("skG", c.skG)}</div>
     </div>
     <div class="head" style="margin-top:16px">Aptitude grade ×</div>
     <div class="fields sfields">${["S", "A", "B", "C", "D"].map(g => `<div><label>${g}</label>${num("g." + g, c.g[g])}</div>`).join("")}</div>
@@ -1385,7 +1416,11 @@ function onChange(e) {
     });
     return;
   }
-  if (el.id === "tOwn") { UI.tOwn = v; drawTrainees(); return; }
+  if (el.dataset.tshow) {
+    const k = el.dataset.tshow;
+    UI.tShow = el.checked ? UI.tShow.concat(k) : UI.tShow.filter(x => x !== k);
+    $("tfs-show").textContent = showSum(); drawTrainees(); return;
+  }
   const tk = el.dataset.tf || el.dataset.tfg || el.dataset.tfa;
   if (tk) {
     const f = UI.tf[tk];

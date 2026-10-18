@@ -7,7 +7,7 @@ since it is untrusted input) and writes data.js next to index.html. Run it when
 new trainees or cards reach Global; the app filters on release_en at runtime,
 so nothing else needs to change.
 """
-import json, os, sys, urllib.request, datetime
+import json, os, re, sys, urllib.request, datetime
 
 BASE = "https://gametora.com/data"
 UA = {"User-Agent": "Mozilla/5.0 (Umacalc data build)"}
@@ -17,6 +17,18 @@ FILES = ["character-cards", "characters", "support-cards", "support_effects", "s
          "db-files/support_card_level", "db-files/card_talent_upgrade",
          "en/db-files/card_talent_upgrade", "items", "gacha/support_banners",
          "gacha/char_banners"]
+
+
+TAGS = (("distance_type", 1, 4), ("running_style", 1, 4), ("ground_type", 1, 2))
+
+
+def skill_tags(k):
+    """What a skill is tied to, read from its activation conditions: [distances, styles, grounds].
+    distance_type 1-4 = Sprint/Mile/Medium/Long, running_style 1-4 = Front/Pace/Late/End,
+    ground_type 1-2 = Turf/Dirt. An empty list means "any". Only equality tests count; a skill
+    with several condition groups is tied to the union of what its groups name."""
+    text = " ".join(g.get("precondition", "") + " " + g.get("condition", "") for g in k.get("condition_groups", []))
+    return [sorted({int(v) for v in re.findall(name + r"==(\d)", text) if lo <= int(v) <= hi}) for name, lo, hi in TAGS]
 
 
 def get(url):
@@ -103,7 +115,7 @@ def main(dl):
     skills = {}
     for k in raw["skills"]:
         if k["id"] in used:
-            skills[k["id"]] = [k.get("name_en") or k.get("enname") or k.get("jpname"), k.get("rarity", 1)]
+            skills[k["id"]] = [k.get("name_en") or k.get("enname") or k.get("jpname"), k.get("rarity", 1)] + skill_tags(k)
 
     effects = {e["id"]: e.get("name_en") or e.get("name_en_eon") for e in raw["support_effects"]}
 

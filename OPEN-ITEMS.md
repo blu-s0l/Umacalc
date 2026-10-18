@@ -29,6 +29,30 @@ Umamusume: Pretty Derby (Global). One `index.html` in the house style from
 
 ## Decided
 
+- **Trials tab: a Team Trials log** (2026-10-18), modelled on the "TT" tab of Steve's sheet.
+  - **Stored:** `root.tt = {lineup: 5×3 card ids, rounds: [{t, e: [{id, di, sc, pl}] ×15}]}`.
+  - **Each match records its own lineup,** so replacements come from the log and there is no
+    manual Prior column.
+  - **Lineup:** set by hand, or with Teams → "Use as Trials lineup" (ace first in each race).
+  - **Entry:** one form per match, a score and a placement for all 15. Enter moves to the next
+    box. Steve's call was always both; commas are allowed. Old matches can be edited, keeping
+    that match's trainees, or deleted.
+  - **Trainee stats:** over a trainee's last N matches in that race (N = Settings → Matches
+    averaged, default 15 like the sheet). Shows average, normalized (min to max across the 15),
+    sample SD, CV, high, low, placement and a trend line.
+  - **Replace ranking:** ascending by average − λ·SD, with λ = Settings → Consistency weight,
+    default 0.5. A steady low scorer goes first; when averages are close, the erratic one does.
+  - **Races table:** race totals per match, plus the team total.
+  - **Replacements:** for each swap, the replaced trainee's last N matches in that race against
+    the newcomer's matches since, plus the same windows for the race total and the team total.
+    Each window is bounded by that race's previous and next swaps. Verdict is Welch's t:
+    |t| ≥ 2 is Better or Worse, below that Unclear, fewer than 3 matches since is Too early.
+  - **Checked against the sheet's 15 matches:** every average, normalized %, race total and
+    placement average matched. Std Dev differs on purpose: the sheet's High, Low and SD formulas
+    cover columns 1–10, the oldest 10, since column 15 is newest. The app uses the same window as
+    the average.
+  - **Not imported:** the sheet's history, at Steve's choice. He starts empty.
+
 - **Aces** (built 2026-10-18, made per pin the same day). Each race has one ace, listed first with
   a gold "Ace" tag. Each Must include row has an **Ace** tick (`pin.ace`). The builder picks these
   aces; that's unrelated to the Aces tab, which holds aces the user enters for another game mode.

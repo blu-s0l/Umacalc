@@ -232,6 +232,20 @@ table.invt tr.hr td{padding:6px 0 0;border-bottom:2px solid var(--line2)}
 .sfields{grid-template-columns:repeat(auto-fill,minmax(130px,150px))}
 table.swt{width:auto}
 table.swt td input{width:72px;padding:4px 6px;font-family:var(--mono);text-align:right}
+/* trials */
+.ttline,.ttgrid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:12px}
+.ttline>div{display:flex;flex-direction:column;gap:5px}
+.ttline select{width:100%}
+.ttrow{display:flex;align-items:center;gap:5px;margin-top:5px}
+.ttrow .nm{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:12.5px}
+.ttrow input{width:76px;text-align:right;font-family:var(--mono)}
+.ttrow input.pl{width:38px}
+.spark{display:block}
+tr.tot td{font-weight:700;border-top:1px solid var(--line2)}
+.pill.good{background:var(--greenbg);color:var(--green);border:1px solid rgba(47,213,131,.3)}
+.pill.bad{background:var(--redbg);color:var(--red);border:1px solid rgba(244,101,95,.3)}
+.pill.mute{background:var(--panel2);color:var(--mut);border:1px solid var(--line2)}
+@media(max-width:900px){.ttline,.ttgrid{grid-template-columns:repeat(2,minmax(0,1fr))}}
 .split3{display:grid;grid-template-columns:repeat(3,minmax(0,340px));justify-content:start;gap:18px}
 @media(max-width:900px){.split3{grid-template-columns:1fr}}
 footer{margin-top:24px}
@@ -325,9 +339,11 @@ const STYLES = [{n: "Front", i: 6}, {n: "Pace", i: 7}, {n: "Late", i: 8}, {n: "E
 // - grow / base: weight of growth % and of base stats. Growth multiplies every training gain for
 //   the whole career, so a fitting 20% is worth about one B; base stats are a light tiebreak.
 // - w: per-race stat weights [Spd, Sta, Pow, Gut, Wit] (see DISTS).
+// - ttN / ttRisk: Trials log window (last N matches) and how hard spread counts against a
+//   trainee when ranking who to replace (average − ttRisk × std dev).
 // - skN / skG: points per own skill tied to the slot's distance, style or surface (normal / gold or
 //   unique). A trainee with two Mile skills scores a few points more in Mile; about a B at most.
-const CFG_DEF = {g: {S: 1.03, A: 1, B: .93, C: .6, D: .3, E: .1, F: .05, G: .02}, fix: .85, pref: 8, grow: .6, base: .25, skN: 1.5, skG: 3,
+const CFG_DEF = {g: {S: 1.03, A: 1, B: .93, C: .6, D: .3, E: .1, F: .05, G: .02}, fix: .85, pref: 8, grow: .6, base: .25, skN: 1.5, skG: 3, ttN: 15, ttRisk: .5,
                  w: DISTS.map(d => d.w.slice())};
 const cfg = () => root.cfg;
 function cfgNorm(c) {
@@ -335,7 +351,7 @@ function cfgNorm(c) {
   if (!c || typeof c !== "object") return d;
   const num = (v, def) => typeof v === "number" && isFinite(v) && v >= 0 ? v : def;
   for (const g in d.g) d.g[g] = num(c.g && c.g[g], d.g[g]);
-  for (const k of ["fix", "pref", "grow", "base", "skN", "skG"]) d[k] = num(c[k], d[k]);
+  for (const k of ["fix", "pref", "grow", "base", "skN", "skG", "ttN", "ttRisk"]) d[k] = num(c[k], d[k]);
   d.w = d.w.map((row, di) => row.map((v, i) => num(c.w && c.w[di] && c.w[di][i], v)));
   return d;
 }
@@ -349,7 +365,7 @@ const EFF_PCT = new Set([1,2,8,15,16,18,25,26,27,28]);
 
 /* ---------------- state ---------------- */
 function blank() {
-  return {schema: SCHEMA, umas: {}, tgt: {}, sups: {}, decks: [], inv: {on: {}, shards: {}}, cfg: cfgNorm(null),
+  return {schema: SCHEMA, umas: {}, tgt: {}, sups: {}, decks: [], inv: {on: {}, shards: {}}, cfg: cfgNorm(null), tt: ttNorm(null),
           team: {pins: [], prefs: [], excl: [], minG: "B", alts: 8},
           plan: {umas: {}, sups: {}, inv: {}, skills: [], open: {}, show: {}},
           set: {jp: false}};
@@ -378,6 +394,7 @@ function normalize(r) {
   const wasForced = !(r.cfg && r.cfg.forceAce === false);
   r.team.pins.forEach(p => { if (typeof p.ace !== "boolean") p.ace = wasForced; });
   r.cfg = cfgNorm(r.cfg);
+  r.tt = ttNorm(r.tt);
   for (const id in r.tgt) if (r.umas[id]) delete r.tgt[id];
   // Pins lock a race only (2026-10-17); clear any style lock saved before that.
   r.team.pins.forEach(p => { p.s = null; });
@@ -500,7 +517,7 @@ function banners(b) {
 }
 
 /* ---------------- nav / shell ---------------- */
-const TABS = [["trainees","Trainees"],["supports","Supports"],["planner","Planner"],["inventory","Inventory"],["teams","Teams"],["decks","Decks"],["aces","Aces"],["parents","Parents"],["hints","Hint Sources"],["settings","Settings"],["data","Data"]];
+const TABS = [["trainees","Trainees"],["supports","Supports"],["planner","Planner"],["inventory","Inventory"],["teams","Teams"],["trials","Trials"],["decks","Decks"],["aces","Aces"],["parents","Parents"],["hints","Hint Sources"],["settings","Settings"],["data","Data"]];
 const VIEWS = {};
 let tab = "trainees";
 // Tabs that are scaffolding only: flagged so nobody plans around them yet.
@@ -977,6 +994,16 @@ function buildTeams() {
   if (base.pins.size || base.prefs.size || root.team.excl.length) extra(teamPool(true), "Unrestricted");
   return {teams: main.concat(extras).sort((a, b) => b.score - a.score), primary: main[0], pool, aces};
 }
+// One race of a built team: its members, its ace (the Ace-ticked pin matched to this race, else
+// the race's best runner) and the display order, ace first. Shared by the team table and by
+// "Use as Trials lineup".
+function raceOrder(t, di, aces) {
+  const ms = t.members.filter(m => m.di === di);
+  const top = list => list.reduce((a, m) => !a || m.f.sc > a.f.sc ? m : a, null);
+  const forced = aces && aces.get(di);
+  const ace = (forced != null && ms.find(m => m.c === forced)) || top(ms);
+  return {ms, ace, order: ace ? [ace, ...ms.filter(m => m !== ace)] : ms};
+}
 VIEWS.teams = () => {
   view.innerHTML = `<div class="card" id="teamCtl"></div><div id="teamOut"></div>`;
   drawTeamCtl();
@@ -1024,12 +1051,7 @@ function drawTeamOut() {
   const pinned = new Set(pool.pins.keys());
   let body = "";
   DISTS.forEach((d, di) => {
-    const ms = t.members.filter(m => m.di === di);
-    // Ace, listed first: the Ace-ticked pin matched to this race, else the race's best runner.
-    const top = list => list.reduce((a, m) => !a || m.f.sc > a.f.sc ? m : a, null);
-    const forced = aces && aces.get(di);
-    const ace = (forced != null && ms.find(m => m.c === forced)) || top(ms);
-    const order = ace ? [ace, ...ms.filter(m => m !== ace)] : ms;
+    const {ms, ace, order} = raceOrder(t, di, aces);
     body += `<tr><td class="dh" colspan="8">${d.n}${d.n === "Dirt" ? " · Mile" : ""}<span class="muted" style="letter-spacing:0;text-transform:none;font-weight:400"> ${ms.length}/3</span></td></tr>`;
     order.forEach(m => {
       body += `<tr><td>${STYLES[m.si].n}${m === ace ? ` <span class="ace">Ace</span>` : ""}</td><td>${uName(m.u)}</td><td class="num">${uStar(m.u)}★</td>
@@ -1054,7 +1076,8 @@ function drawTeamOut() {
   const placed = new Set(aces ? aces.values() : []);
   const missed = t.tag ? [] : root.team.pins.filter(p => p.ace && UBY[p.id] && !placed.has(UBY[p.id].c)).map(p => UBY[p.id].n);
   $("teamOut").innerHTML = `<div class="calbox"><div class="calans">${f1(t.score)}</div>
-    <div class="calsub">Team <b>${UI.teamIdx + 1}</b> of ${teams.length}<span class="vbar">|</span><b>${t.members.length}</b>/15<span class="vbar">|</span>Sparks <b>${t.sparks}</b>${t.tag ? `<span class="vbar">|</span>${t.tag}` : ""}</div></div>
+    <div class="calsub">Team <b>${UI.teamIdx + 1}</b> of ${teams.length}<span class="vbar">|</span><b>${t.members.length}</b>/15<span class="vbar">|</span>Sparks <b>${t.sparks}</b>${t.tag ? `<span class="vbar">|</span>${t.tag}` : ""}</div>
+      <div class="row" style="margin-top:8px"><button class="small" data-act="tuse"${t.members.length === 15 ? "" : " disabled"}>Use as Trials lineup</button></div></div>
     ${missed.length ? `<div class="banner amber">Not ace: ${missed.map(esc).join(", ")}</div>` : ""}
     <div class="card scroll"><table class="dist"><thead><tr><th>Style</th><th>Trainee</th><th class="num">Stars</th><th class="apt"><span>Sf</span><span>Ds</span><span>St</span></th><th class="num">Sparks</th><th class="num">Skills</th><th class="num">Score</th><th>Bench</th></tr></thead><tbody>${body}</tbody></table></div>
     <div class="card scroll"><div class="head">Ranked</div><table><thead><tr><th class="num">#</th><th class="num">Score</th><th class="num">Δ</th><th class="num">Size</th><th class="num">Sparks</th><th>vs best</th><th></th></tr></thead><tbody>${alts}</tbody></table></div>`;
@@ -1299,6 +1322,162 @@ function drawHints() {
 // Its own tab for now (moved out of Planner).
 VIEWS.hints = () => { view.innerHTML = `<div class="card" id="pH"></div>`; drawHints(); };
 
+/* ---------------- Trials (Team Trials log) ---------------- */
+// A match is {t: time, e: [{id, di, sc, pl}] × 15}: who ran which race, their score and their
+// placing. Each match records its own lineup, so replacements are read from the log itself and
+// nothing like the sheet's "Prior" column has to be kept by hand.
+function ttNorm(x) {
+  const d = {lineup: DISTS.map(() => [null, null, null]), rounds: []};
+  if (!x || typeof x !== "object") return d;
+  if (Array.isArray(x.lineup)) d.lineup = DISTS.map((_, di) => [0, 1, 2].map(k => {
+    const v = x.lineup[di] && x.lineup[di][k]; return UBY[v] ? v : null; }));
+  if (Array.isArray(x.rounds)) d.rounds = x.rounds.filter(r => r && Array.isArray(r.e)).map(r => ({t: +r.t || 0,
+    e: r.e.filter(e => e && UBY[e.id] && e.di >= 0 && e.di < 5).map(e => ({id: e.id, di: e.di, sc: +e.sc || 0, pl: +e.pl || 0}))}));
+  return d;
+}
+const ttWin = () => Math.max(3, Math.round(cfg().ttN));
+function stat(xs) {
+  const n = xs.length;
+  if (!n) return null;
+  const m = xs.reduce((a, b) => a + b, 0) / n;
+  const sd = n > 1 ? Math.sqrt(xs.reduce((a, x) => a + (x - m) ** 2, 0) / (n - 1)) : 0;   // sample SD, as the sheet
+  return {n, m, sd, hi: Math.max(...xs), lo: Math.min(...xs), cv: m ? sd / m : 0};
+}
+const ttRange = (from, to) => root.tt.rounds.slice(Math.max(0, from), to);
+// One trainee's entries in one race, oldest first.
+const ttOf = (rs, id, di) => rs.flatMap(r => r.e.filter(e => e.id === id && e.di === di));
+const raceTotal = (r, di) => r.e.filter(e => e.di === di).reduce((a, e) => a + e.sc, 0);
+const teamTotal = r => r.e.reduce((a, e) => a + e.sc, 0);
+// Replacements, read from consecutive matches: in a race, whoever left and whoever arrived.
+function ttChanges() {
+  const R = root.tt.rounds, out = [];
+  for (let i = 1; i < R.length; i++) for (let di = 0; di < 5; di++) {
+    const prev = R[i - 1].e.filter(e => e.di === di).map(e => e.id), cur = R[i].e.filter(e => e.di === di).map(e => e.id);
+    const gone = prev.filter(id => !cur.includes(id)), came = cur.filter(id => !prev.includes(id));
+    gone.forEach((id, j) => { if (came[j] != null) out.push({at: i, di, out: id, in: came[j]}); });
+  }
+  return out;
+}
+// Did "after" really move from "before"? Welch's t on the two samples. |t| ≥ 2 is called a real
+// change; fewer than 3 matches since the swap is too early to say anything.
+function verdict(a, b) {
+  if (b.length < 3 || a.length < 2) return "Too early";
+  const A = stat(a), B = stat(b), se = Math.sqrt(A.sd ** 2 / A.n + B.sd ** 2 / B.n);
+  const t = se ? (B.m - A.m) / se : B.m - A.m;
+  return t >= 2 ? "Better" : t <= -2 ? "Worse" : "Unclear";
+}
+const pct = (a, b) => a ? (b / a - 1) * 100 : 0;
+const fPct = v => `<span class="${v > 0 ? "pos" : v < 0 ? "neg" : ""}">${v > 0 ? "+" : ""}${v.toFixed(1)}%</span>`;
+const vPill = v => `<span class="pill ${v === "Better" ? "good" : v === "Worse" ? "bad" : v === "Too early" ? "mute" : "warn"}">${v}</span>`;
+// Hand-rolled sparkline of a trainee's recent scores, scaled to its own range.
+function spark(xs) {
+  if (xs.length < 2) return "";
+  const lo = Math.min(...xs), hi = Math.max(...xs), w = 84, h = 20, sx = w / (xs.length - 1);
+  const y = v => hi === lo ? h / 2 : h - 2 - (v - lo) / (hi - lo) * (h - 4);
+  return `<svg class="spark" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}"><polyline fill="none" stroke="var(--gold)" stroke-width="1.5" points="${xs.map((v, i) => `${(i * sx).toFixed(1)},${y(v).toFixed(1)}`).join(" ")}"/></svg>`;
+}
+VIEWS.trials = () => {
+  view.innerHTML = `<div class="card" id="ttLine"></div><div class="card scroll" id="ttEntry"></div><div class="card scroll" id="ttUmas"></div>
+    <div class="card scroll" id="ttRaces"></div><div class="card scroll" id="ttSwaps"></div><div class="card scroll" id="ttLog"></div>`;
+  drawTrials();
+};
+function drawTrials() {
+  const L = root.tt.lineup, R = root.tt.rounds, N = ttWin();
+  // Lineup
+  const owned = ownedUmas().sort((a, b) => a.n.localeCompare(b.n) || a.t.localeCompare(b.t));
+  const uo = [["", "—"], ...owned.map(u => [u.id, `${u.n} · ${u.t}`])];
+  const ids = L.flat().filter(Boolean), chars = ids.map(id => UBY[id].c);
+  const dup = chars.length !== new Set(chars).size;
+  $("ttLine").innerHTML = `<div class="head">Lineup</div><div class="ttline">${DISTS.map((d, di) => `<div><label>${d.n}</label>
+    ${[0, 1, 2].map(k => `<select class="mini" data-act="ttl" data-di="${di}" data-k="${k}">${opts(uo, L[di][k] || "")}</select>`).join("")}</div>`).join("")}</div>
+    ${dup ? `<div class="banner amber" style="margin-top:10px">A trainee appears twice</div>` : ""}`;
+  drawTtEntry();
+  // Trainees in the current lineup, over the last N matches each ran in that race.
+  const rows = [];
+  DISTS.forEach((d, di) => L[di].forEach(id => { if (id) {
+    const es = ttOf(R, id, di).slice(-N), s = stat(es.map(e => e.sc)), p = stat(es.filter(e => e.pl).map(e => e.pl));
+    rows.push({id, di, es, s, p, risk: s ? s.m - cfg().ttRisk * s.sd : null});
+  }}));
+  const ms = rows.filter(r => r.s).map(r => r.s.m), lo = Math.min(...ms), hi = Math.max(...ms);
+  // Replace order: lowest average after a penalty for spread, so a trainee who is merely close to
+  // the bottom but erratic can outrank a steady one.
+  const order = rows.filter(r => r.s).sort((a, b) => a.risk - b.risk);
+  const n = v => fN(v);
+  $("ttUmas").innerHTML = `<div class="head">Trainees<span class="vbar">|</span>Last ${N}</div>
+    <table><thead><tr><th>Race</th><th>Trainee</th><th class="num">Runs</th><th class="num">Avg</th><th class="num">Norm</th><th class="num">SD</th><th class="num">CV</th>
+      <th class="num">High</th><th class="num">Low</th><th class="num">Place</th><th>Trend</th><th class="num">Replace</th></tr></thead><tbody>
+    ${rows.map(r => { const rk = order.indexOf(r) + 1, nm = r.s && hi > lo ? (r.s.m - lo) / (hi - lo) * 100 : null;
+      return `<tr><td>${DISTS[r.di].n}</td><td>${uName(UBY[r.id])}</td><td class="num">${r.s ? r.s.n : ""}</td>
+        <td class="num gold">${r.s ? n(r.s.m) : ""}</td><td class="num">${nm == null ? "" : nm.toFixed(1) + "%"}</td>
+        <td class="num">${r.s && r.s.n > 1 ? n(r.s.sd) : ""}</td><td class="num">${r.s && r.s.n > 1 ? (r.s.cv * 100).toFixed(0) + "%" : ""}</td>
+        <td class="num">${r.s ? n(r.s.hi) : ""}</td><td class="num">${r.s ? n(r.s.lo) : ""}</td><td class="num">${r.p ? r.p.m.toFixed(2) : ""}</td>
+        <td>${spark(r.es.map(e => e.sc))}</td><td class="num${rk === 1 ? " gold" : ""}">${rk || ""}</td></tr>`; }).join("") || `<tr><td colspan="12" class="muted">—</td></tr>`}</tbody></table>`;
+  // Races and team, per match, over the last N matches.
+  const last = R.slice(-N);
+  const rs = DISTS.map((d, di) => ({d, s: stat(last.filter(r => r.e.some(e => e.di === di)).map(r => raceTotal(r, di))),
+    p: stat(last.flatMap(r => r.e.filter(e => e.di === di && e.pl).map(e => e.pl)))}));
+  const rm = rs.filter(x => x.s).map(x => x.s.m), rlo = Math.min(...rm), rhi = Math.max(...rm), ts = stat(last.map(teamTotal));
+  $("ttRaces").innerHTML = `<div class="head">Races<span class="vbar">|</span>Last ${N}</div>
+    <table><thead><tr><th>Race</th><th class="num">Avg</th><th class="num">Norm</th><th class="num">SD</th><th class="num">High</th><th class="num">Low</th><th class="num">Place</th></tr></thead><tbody>
+    ${rs.map(x => `<tr><td>${x.d.n}</td><td class="num gold">${x.s ? n(x.s.m) : ""}</td><td class="num">${x.s && rhi > rlo ? ((x.s.m - rlo) / (rhi - rlo) * 100).toFixed(1) + "%" : ""}</td>
+      <td class="num">${x.s && x.s.n > 1 ? n(x.s.sd) : ""}</td><td class="num">${x.s ? n(x.s.hi) : ""}</td><td class="num">${x.s ? n(x.s.lo) : ""}</td><td class="num">${x.p ? x.p.m.toFixed(2) : ""}</td></tr>`).join("")}
+    ${ts ? `<tr class="tot"><td>Team</td><td class="num gold">${n(ts.m)}</td><td></td><td class="num">${ts.n > 1 ? n(ts.sd) : ""}</td><td class="num">${n(ts.hi)}</td><td class="num">${n(ts.lo)}</td><td></td></tr>` : ""}</tbody></table>`;
+  // Replacements: the replaced trainee's last N matches in that race against the newcomer's
+  // matches since, and the same windows for the race total and the whole team (placement bonuses
+  // mean a swap can lift or sink teammates too). Each window stops at the race's previous or next swap.
+  const ch = ttChanges();
+  const sw = ch.map((c, i) => {
+    const prevAt = Math.max(0, ...ch.slice(0, i).filter(x => x.di === c.di).map(x => x.at));
+    const next = ch.slice(i + 1).find(x => x.di === c.di), nextAt = next ? next.at : R.length;
+    const before = ttRange(Math.max(prevAt, c.at - N), c.at), after = ttRange(c.at, Math.min(nextAt, c.at + N));
+    const a = ttOf(before, c.out, c.di), b = ttOf(after, c.in, c.di);
+    const ra = before.map(r => raceTotal(r, c.di)), rb = after.map(r => raceTotal(r, c.di));
+    const ta = before.map(teamTotal), tb = after.map(teamTotal);
+    const sa = stat(a.map(e => e.sc)), sb = stat(b.map(e => e.sc));
+    const pa = stat(a.filter(e => e.pl).map(e => e.pl)), pb = stat(b.filter(e => e.pl).map(e => e.pl));
+    return `<tr><td class="num">${c.at + 1}</td><td>${DISTS[c.di].n}</td><td>${esc(UBY[c.out].n)} → ${esc(UBY[c.in].n)}</td>
+      <td class="num">${sa ? n(sa.m) : ""}<span class="muted"> ${sa ? sa.n : ""}</span></td><td class="num">${sb ? n(sb.m) : ""}<span class="muted"> ${sb ? sb.n : ""}</span></td>
+      <td class="num">${sa && sb ? fPct(pct(sa.m, sb.m)) : ""}</td><td>${vPill(verdict(a.map(e => e.sc), b.map(e => e.sc)))}</td>
+      <td class="num">${ra.length && rb.length ? fPct(pct(stat(ra).m, stat(rb).m)) : ""}</td>
+      <td class="num">${ta.length && tb.length ? fPct(pct(stat(ta).m, stat(tb).m)) : ""}</td><td>${vPill(verdict(ta, tb))}</td>
+      <td class="num">${pa && pb ? `${pa.m.toFixed(2)} → ${pb.m.toFixed(2)}` : ""}</td></tr>`;
+  }).reverse().join("");
+  $("ttSwaps").innerHTML = `<div class="head">Replacements</div>
+    <table><thead><tr><th class="num">Match</th><th>Race</th><th>Out → In</th><th class="num">Before</th><th class="num">After</th><th class="num">Δ</th><th>Trainee</th>
+      <th class="num">Race Δ</th><th class="num">Team Δ</th><th>Team</th><th class="num">Place</th></tr></thead><tbody>${sw || `<tr><td colspan="11" class="muted">—</td></tr>`}</tbody></table>`;
+  // Match log, newest first.
+  $("ttLog").innerHTML = `<div class="head">Matches<span class="vbar">|</span>${R.length}</div>
+    <table><thead><tr><th class="num">#</th><th>Date</th><th class="num">Team</th>${DISTS.map(d => `<th class="num">${d.n}</th>`).join("")}<th></th></tr></thead><tbody>
+    ${R.map((r, i) => `<tr${UI.ttEdit === i ? ' class="sorted"' : ""}><td class="num">${i + 1}</td><td class="mono">${r.t ? new Date(r.t).toISOString().slice(0, 10) : ""}</td>
+      <td class="num gold">${n(teamTotal(r))}</td>${DISTS.map((d, di) => `<td class="num">${n(raceTotal(r, di))}</td>`).join("")}
+      <td><button class="small" data-act="ttedit" data-i="${i}">Edit</button> <button class="x" data-act="ttdel" data-i="${i}">×</button></td></tr>`).reverse().join("") || `<tr><td colspan="9" class="muted">—</td></tr>`}</tbody></table>`;
+}
+// Entry form: 15 rows of score + placement. A new match takes the current lineup; editing an old
+// one keeps that match's own trainees.
+function drawTtEntry(msgText) {
+  const R = root.tt.rounds, edit = UI.ttEdit != null && R[UI.ttEdit];
+  const src = edit ? edit.e : DISTS.flatMap((d, di) => root.tt.lineup[di].map(id => id && {id, di, sc: "", pl: ""}));
+  const ready = src.length === 15 && src.every(Boolean);
+  const fmt = v => v === "" || v == null ? "" : String(v);
+  $("ttEntry").innerHTML = `<div class="head">${edit ? `Edit match ${UI.ttEdit + 1}` : "Add match"}</div>
+    ${ready ? `<div class="ttgrid">${DISTS.map((d, di) => `<div><div class="lbl">${d.n}</div>
+      ${src.map((e, j) => e.di === di ? `<div class="ttrow"><span class="nm" title="${esc(UBY[e.id].t)}">${esc(UBY[e.id].n)}</span>
+        <input class="mini" inputmode="numeric" placeholder="Score" data-tt="sc" data-j="${j}" value="${fmt(e.sc)}">
+        <input class="mini pl" inputmode="numeric" placeholder="#" data-tt="pl" data-j="${j}" value="${fmt(e.pl || "")}"></div>` : "").join("")}</div>`).join("")}</div>
+      <div class="row" style="margin-top:10px"><button class="primary" data-act="ttsave">${edit ? "Save" : "Add"}</button>${edit ? `<button class="small" data-act="ttcancel">Cancel</button>` : ""}</div>`
+      : `<div class="muted">Lineup incomplete</div>`}${msgText ? `<div class="err">${esc(msgText)}</div>` : ""}`;
+}
+function ttSave() {
+  const R = root.tt.rounds, edit = UI.ttEdit != null && R[UI.ttEdit];
+  const src = edit ? edit.e : DISTS.flatMap((d, di) => root.tt.lineup[di].map(id => ({id, di})));
+  const val = (k, j) => { const el = view.querySelector(`input[data-tt="${k}"][data-j="${j}"]`); return el ? el.value.replace(/[,\s]/g, "") : ""; };
+  const e = src.map((x, j) => ({id: x.id, di: x.di, sc: Math.round(+val("sc", j)), pl: Math.round(+val("pl", j))}));
+  const bad = e.filter(x => !(x.sc > 0) || !(x.pl >= 1 && x.pl <= 18)).length;
+  if (bad) { drawTtEntry(`${bad} of 15 rows need a score and a placement.`); return; }
+  if (edit) edit.e = e; else R.push({t: Date.now(), e});
+  UI.ttEdit = null; save(); drawTrials();
+}
+
 /* ---------------- Settings ---------------- */
 VIEWS.settings = () => {
   const c = cfg();
@@ -1319,6 +1498,11 @@ VIEWS.settings = () => {
     <div class="head" style="margin-top:16px">Stat weights</div>
     <div class="scroll"><table class="swt"><thead><tr><th>Race</th>${STAT.map(s => `<th class="num">${s}</th>`).join("")}</tr></thead><tbody>
       ${DISTS.map((d, di) => `<tr><td>${d.n}</td>${c.w[di].map((v, i) => `<td>${num(`w.${di}.${i}`, v)}</td>`).join("")}</tr>`).join("")}</tbody></table></div>
+    <div class="head" style="margin-top:16px">Trials</div>
+    <div class="fields sfields">
+      <div><label>Matches averaged</label>${num("ttN", c.ttN, "1")}</div>
+      <div><label>Consistency weight</label>${num("ttRisk", c.ttRisk)}</div>
+    </div>
     <div class="row" style="margin-top:14px"><button class="small" data-act="cfgreset">Defaults</button></div></div>`;
 };
 // A settings change makes any built team stale, so drop it; the next Build uses the new values.
@@ -1396,6 +1580,22 @@ function onClick(e) {
     case "prx": root.team.prefs.splice(i, 1); save(); drawTeamCtl(); break;
     case "build": UI.team = buildTeams(); UI.teamIdx = Math.max(0, UI.team.teams.indexOf(UI.team.primary)); drawTeamOut(); break;
     case "tview": UI.teamIdx = i; drawTeamOut(); break;
+    case "tuse": {
+      const R = UI.team, t = R && R.teams[Math.min(UI.teamIdx, R.teams.length - 1)];
+      if (!t || t.members.length !== 15) break;
+      root.tt.lineup = DISTS.map((d, di) => raceOrder(t, di, t.aces || R.aces).order.map(m => m.u.id));
+      UI.ttEdit = null; save(); location.hash = "trials"; break;
+    }
+    case "ttsave": ttSave(); break;
+    case "ttcancel": UI.ttEdit = null; drawTrials(); break;
+    case "ttedit": UI.ttEdit = i; drawTrials(); $("ttEntry").scrollIntoView({behavior: "smooth", block: "start"}); break;
+    case "ttdel":
+      if (confirm(`Delete match ${i + 1}?`)) {
+        root.tt.rounds.splice(i, 1);
+        if (UI.ttEdit === i) UI.ttEdit = null; else if (UI.ttEdit > i) UI.ttEdit--;
+        save(); drawTrials();
+      }
+      break;
     case "hx": root.plan.skills.splice(i, 1); save(); drawHints(); break;
     case "hadd": {
       const n = $("hq").value.trim().toLowerCase();
@@ -1479,6 +1679,7 @@ function onChange(e) {
     case "pradd": if (v && !root.team.prefs.includes(+v)) root.team.prefs.push(+v); save(); drawTeamCtl(); break;
     case "pind": root.team.pins[i].d = v === "" ? null : +v; save(); break;
     case "pinace": root.team.pins[i].ace = el.checked; save(); break;
+    case "ttl": root.tt.lineup[+el.dataset.di][+el.dataset.k] = v ? +v : null; save(); drawTrials(); break;
     case "ming": root.team.minG = v; UI.team = null; save(); break;
     case "alts": root.team.alts = Math.max(0, Math.min(30, +v || 0)); UI.team = null; save(); break;
     case "pus": root.plan.umas[id] = {...(root.plan.umas[id] || {}), s: +v}; save(); drawPlanner(); break;
@@ -1515,6 +1716,14 @@ function onInput(e) {
 view.addEventListener("click", onClick);
 view.addEventListener("change", onChange);
 view.addEventListener("input", onInput);
+// Match entry: Enter moves to the next box, and on the last one saves the match.
+view.addEventListener("keydown", e => {
+  const el = e.target;
+  if (e.key !== "Enter" || !el.dataset || !el.dataset.tt) return;
+  e.preventDefault();
+  const all = [...view.querySelectorAll("input[data-tt]")], i = all.indexOf(el);
+  if (i < all.length - 1) all[i + 1].focus(); else ttSave();
+});
 // <details> toggle doesn't bubble; catch it on the way down to remember which filter groups are open.
 view.addEventListener("toggle", e => { const k = e.target.dataset && e.target.dataset.k; if (k && UI.tf[k]) UI.tf[k].open = e.target.open; }, true);
 // Remember which planner sections are collapsed.

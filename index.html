@@ -227,6 +227,9 @@ hr.rule{border:0;border-top:2px solid var(--line2);margin:14px 0 8px}
 .srow{display:flex;justify-content:space-between;gap:10px;padding:5px 2px;border-bottom:1px solid var(--line);font-size:12.5px}
 table.invt tr.sech td{padding-top:10px;border-bottom:1px solid var(--line2)}
 table.invt tr.hr td{padding:6px 0 0;border-bottom:2px solid var(--line2)}
+.sfields{grid-template-columns:repeat(auto-fill,minmax(130px,150px))}
+table.swt{width:auto}
+table.swt td input{width:72px;padding:4px 6px;font-family:var(--mono);text-align:right}
 .split3{display:grid;grid-template-columns:repeat(3,minmax(0,340px));justify-content:start;gap:18px}
 @media(max-width:900px){.split3{grid-template-columns:1fr}}
 footer{margin-top:24px}
@@ -310,15 +313,29 @@ const DISTS = [
 ];
 const STYLES = [{n: "Front", i: 6}, {n: "Pace", i: 7}, {n: "Late", i: 8}, {n: "End", i: 9}];
 
-// How much a grade costs, roughly as how hard it is to raise to A by inheritance.
-// One B is a single common spark away, so it's cheap; C needs the same aptitude raised
-// twice and is much harder.
-const GMULT = {S: 1.03, A: 1, B: .93, C: .6, D: .3, E: 0, F: 0, G: 0};
-// Every further aptitude that needs fixing costs this on top, because the parents then
-// have to carry several different sparks at once. Two Bs ≈ .74, three ≈ .58, B+C ≈ .47.
-const EXTRA_FIX = .85;
-// A preferred trainee wins a slot it is within this many points of; worth about one B.
-const PREF_BONUS = 8;
+// Team-building settings, editable on the Settings tab (root.cfg). The defaults and why:
+// - g: grade factor, roughly how hard a grade is to raise to A by inheritance. One B is a single
+//   common spark away, so it's cheap; C needs the same aptitude raised twice. E–G are always 0.
+// - fix: every further aptitude below A costs this on top, because the parents then have to carry
+//   several different sparks at once. Two Bs ≈ .74, three ≈ .58, B+C ≈ .47.
+// - pref: a preferred trainee wins a slot it is within this many points of; about one B.
+// - grow / base: weight of growth % and of base stats. Growth multiplies every training gain for
+//   the whole career, so a fitting 20% is worth about one B; base stats are a light tiebreak.
+// - w: per-race stat weights [Spd, Sta, Pow, Gut, Wit] (see DISTS).
+// - forceAce: give as many Must include trainees as possible a race of their own as its ace.
+const CFG_DEF = {g: {S: 1.03, A: 1, B: .93, C: .6, D: .3}, fix: .85, pref: 8, grow: .6, base: .25,
+                 forceAce: true, w: DISTS.map(d => d.w.slice())};
+const cfg = () => root.cfg;
+function cfgNorm(c) {
+  const d = JSON.parse(JSON.stringify(CFG_DEF));
+  if (!c || typeof c !== "object") return d;
+  const num = (v, def) => typeof v === "number" && isFinite(v) && v >= 0 ? v : def;
+  for (const g in d.g) d.g[g] = num(c.g && c.g[g], d.g[g]);
+  for (const k of ["fix", "pref", "grow", "base"]) d[k] = num(c[k], d[k]);
+  if (typeof c.forceAce === "boolean") d.forceAce = c.forceAce;
+  d.w = d.w.map((row, di) => row.map((v, i) => num(c.w && c.w[di] && c.w[di][i], v)));
+  return d;
+}
 
 // Rough per-unit value of each support effect, for ranking cards against each other.
 // Friendship and training effectiveness dominate; a flat stat bonus is worth a few points.
@@ -329,7 +346,7 @@ const EFF_PCT = new Set([1,2,8,15,16,18,25,26,27,28]);
 
 /* ---------------- state ---------------- */
 function blank() {
-  return {schema: SCHEMA, umas: {}, tgt: {}, sups: {}, decks: [], inv: {on: {}, shards: {}},
+  return {schema: SCHEMA, umas: {}, tgt: {}, sups: {}, decks: [], inv: {on: {}, shards: {}}, cfg: cfgNorm(null),
           team: {pins: [], prefs: [], excl: [], minG: "B", alts: 8},
           plan: {umas: {}, sups: {}, inv: {}, skills: [], open: {}, show: {}},
           set: {jp: false}};
@@ -353,6 +370,7 @@ function normalize(r) {
   }
   for (const k of ["team", "plan", "set", "inv"]) for (const kk in b[k]) if (r[k][kk] == null) r[k][kk] = b[k][kk];
   r.decks.forEach(normDeck);
+  r.cfg = cfgNorm(r.cfg);
   for (const id in r.tgt) if (r.umas[id]) delete r.tgt[id];
   // Pins lock a race only (2026-10-17); clear any style lock saved before that.
   r.team.pins.forEach(p => { p.s = null; });
@@ -474,7 +492,7 @@ function banners(b) {
 }
 
 /* ---------------- nav / shell ---------------- */
-const TABS = [["trainees","Trainees"],["supports","Supports"],["planner","Planner"],["inventory","Inventory"],["teams","Teams"],["decks","Decks"],["aces","Aces"],["parents","Parents"],["hints","Hint Sources"],["data","Data"]];
+const TABS = [["trainees","Trainees"],["supports","Supports"],["planner","Planner"],["inventory","Inventory"],["teams","Teams"],["decks","Decks"],["aces","Aces"],["parents","Parents"],["hints","Hint Sources"],["settings","Settings"],["data","Data"]];
 const VIEWS = {};
 let tab = "trainees";
 // Tabs that are scaffolding only: flagged so nobody plans around them yet.
@@ -486,7 +504,7 @@ function show() {
 function go() {
   const h = location.hash.slice(1);
   tab = TABS.some(t => t[0] === h) ? h : "trainees";
-  $("nav").innerHTML = TABS.map(([k, n]) => `<a href="#${k}" class="${k === tab ? "on" : ""}${k === "data" ? " end" : ""}">${n}</a>`).join("");
+  $("nav").innerHTML = TABS.map(([k, n]) => `<a href="#${k}" class="${k === tab ? "on" : ""}${k === "settings" ? " end" : ""}">${n}</a>`).join("");
   show();
 }
 function drawBanner() {
@@ -762,20 +780,19 @@ function slotFit(u, star, di, si, minG) {
   const g = [u.a[d.surf], u.a[d.dist], u.a[STYLES[si].i]];
   const lim = GRADES.indexOf(minG);
   if (g.some(x => GRADES.indexOf(x) > lim)) return null;
-  let m = g.reduce((p, x) => p * GMULT[x], 1);
+  const c = cfg();
+  let m = g.reduce((p, x) => p * (c.g[x] || 0), 1);
   const fixes = g.filter(x => GRADES.indexOf(x) > 1).length;
-  if (fixes > 1) m *= EXTRA_FIX ** (fixes - 1);
+  if (fixes > 1) m *= c.fix ** (fixes - 1);
   // A pinned trainee (minG "G") is placed even on an unusable aptitude; it just scores near zero.
   if (m <= 0) { if (minG !== "G") return null; m = .05; }
   // Sparks: grade steps short of A, i.e. how much inheritance it takes to make the slot comfortable.
   const sp = g.reduce((n, x) => n + Math.max(0, GRADES.indexOf(x) - 1), 0);
-  const st = uStats(u, star), w = d.w;
-  const ws = w.reduce((a, b) => a + b, 0);
+  const st = uStats(u, star), w = c.w[di];
+  const ws = w.reduce((a, b) => a + b, 0) || 1;                        // all-zero weights: no stat term
   const stat = st.reduce((a, v, i) => a + v * w[i], 0) / ws;          // base stats at owned stars
   const grow = u.g.reduce((a, v, i) => a + v * w[i], 0) / ws;         // growth bonus %
-  // Growth outweighs base stats: it multiplies every training gain for the whole career, so a
-  // fitting 20% bonus is worth about one B (~5 points). Base stats are a light tiebreak.
-  const sc = 100 * m + (stat - 85) / 4 + grow * .6;
+  const sc = 100 * m + (stat - 85) * c.base + grow * c.grow;
   return {sc, g, sp};
 }
 function teamPool() {
@@ -813,7 +830,7 @@ function solveTeam(pool, ban) {
       let best = null;
       for (const u of pool.byChar.get(c)) {
         const f = slotFit(u, uStar(u), di, si, pin ? "G" : root.team.minG);
-        const w = f && f.sc + (pool.prefs.has(u.id) ? PREF_BONUS : 0);
+        const w = f && f.sc + (pool.prefs.has(u.id) ? cfg().pref : 0);
         if (f && (!best || w > best.w)) best = {u, f, w};
       }
       if (!best) continue;
@@ -845,11 +862,52 @@ function solveTeam(pool, ban) {
   const sig = members.map(m => `${m.u.id}@${m.di}${m.si}`).join(",");
   // Ranking counts preferences, so a team that keeps a preferred trainee outranks one that
   // trades them away for a slightly higher raw score.
-  const rank = score + members.filter(m => pool.prefs.has(m.u.id)).length * PREF_BONUS;
+  const rank = score + members.filter(m => pool.prefs.has(m.u.id)).length * cfg().pref;
   return {members, score, rank, sig, sparks: members.reduce((a, m) => a + m.f.sp, 0)};
 }
+// Force ace: give as many Must include trainees as possible a race of their own, as that race's
+// ace. Most aces first, then best fit. A pin qualifies for a race when it has a slot there at the
+// Lowest aptitude setting and its own race lock allows it. Returns Map(race → character). A race
+// gets at most one pin this way; other pins stay free for the main solve.
+function aceMatch(pool) {
+  const pins = [...pool.pins.entries()];
+  const fit = pins.map(([c, p]) => DISTS.map((d, di) => {
+    if (p.d != null && p.d !== di) return null;
+    let best = null;
+    for (const u of pool.byChar.get(c) || []) for (let si = 0; si < 4; si++) {
+      const f = slotFit(u, uStar(u), di, si, root.team.minG);
+      if (f && (best == null || f.sc > best)) best = f.sc;
+    }
+    return best;
+  }));
+  // Exhaustive over races with memo on (race, pins used). At most five pins are ever used, so
+  // the states stay few even with many pins.
+  const memo = new Map();
+  const better = (a, b) => a.n > b.n || (a.n === b.n && a.s > b.s);
+  const go = (di, used) => {
+    if (di === 5) return {n: 0, s: 0, pick: []};
+    const key = di + "|" + used;
+    if (memo.has(key)) return memo.get(key);
+    const r0 = go(di + 1, used);
+    let best = {n: r0.n, s: r0.s, pick: [-1, ...r0.pick]};
+    pins.forEach((_, i) => {
+      if (used & (1 << i) || fit[i][di] == null) return;
+      const r = go(di + 1, used | (1 << i)), cand = {n: r.n + 1, s: r.s + fit[i][di], pick: [i, ...r.pick]};
+      if (better(cand, best)) best = cand;
+    });
+    memo.set(key, best);
+    return best;
+  };
+  const out = new Map();
+  if (pins.length && pins.length <= 30) go(0, 0).pick.forEach((i, di) => { if (i >= 0) out.set(di, pins[i][0]); });
+  return out;
+}
 function buildTeams() {
-  const pool = teamPool();
+  const base = teamPool();
+  const aces = cfg().forceAce ? aceMatch(base) : new Map();
+  // Each matched pin is locked to the race it will ace; the rest of the build is unchanged.
+  const lock = new Map([...aces].map(([di, c]) => [c, di]));
+  const pool = lock.size ? {...base, pins: new Map([...base.pins].map(([c, p]) => [c, lock.has(c) ? {...p, d: lock.get(c)} : p]))} : base;
   const best = solveTeam(pool, new Set());
   const seen = new Map([[best.sig, best]]);
   const pinned = new Set(pool.pins.keys());
@@ -870,7 +928,7 @@ function buildTeams() {
   lvl1.slice(0, 3).forEach(t => expand(t, t.ban));
   // Ranked by score, highest first (Steve, 2026-10-17). Prefer still shapes which teams get built.
   const teams = [...seen.values()].sort((a, b) => b.score - a.score);
-  return {teams: teams.slice(0, 1 + Math.max(0, root.team.alts)), pool};
+  return {teams: teams.slice(0, 1 + Math.max(0, root.team.alts)), pool, aces};
 }
 VIEWS.teams = () => {
   view.innerHTML = `<div class="card" id="teamCtl"></div><div id="teamOut"></div>`;
@@ -900,7 +958,7 @@ function drawTeamCtl() {
 function drawTeamOut() {
   const R = UI.team;
   if (!R) { $("teamOut").innerHTML = ""; return; }
-  const {teams, pool} = R;
+  const {teams, pool, aces} = R;
   const t = teams[Math.min(UI.teamIdx, teams.length - 1)];
   if (!t || !t.members.length) { $("teamOut").innerHTML = `<div class="card muted">No eligible trainees.</div>`; return; }
   const inTeam = new Set(t.members.map(m => m.c));
@@ -917,10 +975,15 @@ function drawTeamOut() {
   let body = "";
   DISTS.forEach((d, di) => {
     const ms = t.members.filter(m => m.di === di);
-    // Ace: the race's highest-scoring Must include runner, else its highest-scoring runner.
-    // Listed first. (The full two-build ace solve is still on OPEN-ITEMS.)
-    const pool2 = ms.some(m => pinned.has(m.c)) ? ms.filter(m => pinned.has(m.c)) : ms;
-    const ace = pool2.reduce((a, m) => !a || m.f.sc > a.f.sc ? m : a, null);
+    // Ace, listed first. With Force ace on: the pin matched to this race, or failing that the
+    // race's best Must include runner. Otherwise, and as the fallback: the race's best runner.
+    const top = list => list.reduce((a, m) => !a || m.f.sc > a.f.sc ? m : a, null);
+    let ace = null;
+    if (cfg().forceAce) {
+      const forced = aces && aces.get(di);
+      ace = (forced != null && ms.find(m => m.c === forced)) || top(ms.filter(m => pinned.has(m.c)));
+    }
+    if (!ace) ace = top(ms);
     const order = ace ? [ace, ...ms.filter(m => m !== ace)] : ms;
     body += `<tr><td class="dh" colspan="7">${d.n}${d.n === "Dirt" ? " · Mile" : ""}<span class="muted" style="letter-spacing:0;text-transform:none;font-weight:400"> ${ms.length}/3</span></td></tr>`;
     order.forEach(m => {
@@ -1186,6 +1249,39 @@ function drawHints() {
 // Its own tab for now (moved out of Planner).
 VIEWS.hints = () => { view.innerHTML = `<div class="card" id="pH"></div>`; drawHints(); };
 
+/* ---------------- Settings ---------------- */
+VIEWS.settings = () => {
+  const c = cfg();
+  const num = (path, v, step = ".01") => `<input type="number" step="${step}" min="0" data-cfg="${path}" value="${v}">`;
+  view.innerHTML = `<div class="card"><div class="head">Team building</div>
+    <label class="ck" style="margin-bottom:14px"><input type="checkbox" data-cfg="forceAce"${c.forceAce ? " checked" : ""}>Force must include into ace role?</label>
+    <div class="fields sfields">
+      <div><label>Lowest aptitude</label><select data-act="ming">${opts([["A","A"],["B","B"],["C","C"]], root.team.minG)}</select></div>
+      <div><label>Alternatives</label><input type="number" min="0" max="30" data-act="alts" value="${root.team.alts}"></div>
+      <div><label>Prefer bonus</label>${num("pref", c.pref, "1")}</div>
+      <div><label>Each extra fix ×</label>${num("fix", c.fix)}</div>
+      <div><label>Growth weight</label>${num("grow", c.grow)}</div>
+      <div><label>Base stat weight</label>${num("base", c.base)}</div>
+    </div>
+    <div class="head" style="margin-top:16px">Aptitude grade ×</div>
+    <div class="fields sfields">${["S", "A", "B", "C", "D"].map(g => `<div><label>${g}</label>${num("g." + g, c.g[g])}</div>`).join("")}</div>
+    <div class="head" style="margin-top:16px">Stat weights</div>
+    <div class="scroll"><table class="swt"><thead><tr><th>Race</th>${STAT.map(s => `<th class="num">${s}</th>`).join("")}</tr></thead><tbody>
+      ${DISTS.map((d, di) => `<tr><td>${d.n}</td>${c.w[di].map((v, i) => `<td>${num(`w.${di}.${i}`, v)}</td>`).join("")}</tr>`).join("")}</tbody></table></div>
+    <div class="row" style="margin-top:14px"><button class="small" data-act="cfgreset">Defaults</button></div></div>`;
+};
+// A settings change makes any built team stale, so drop it; the next Build uses the new values.
+function setCfg(path, el) {
+  const c = cfg(), ks = path.split(".");
+  if (path === "forceAce") c.forceAce = el.checked;
+  else {
+    const v = Math.max(0, +el.value || 0);
+    let o = c; for (let i = 0; i < ks.length - 1; i++) o = o[ks[i]];
+    o[ks[ks.length - 1]] = v;
+  }
+  UI.team = null; save();
+}
+
 /* ---------------- Data ---------------- */
 VIEWS.data = () => {
   const gU = UMAS.filter(u => u.en && u.en <= TODAY).length, gS = SUPS.filter(s => s.en && s.en <= TODAY).length;
@@ -1271,11 +1367,13 @@ function onClick(e) {
     }
     case "imp": $("impf").click(); break;
     case "reset": if (confirm("Erase all trainees, cards, decks and plans?")) { root = blank(); save(); msg("Reset."); } break;
+    case "cfgreset": if (confirm("Reset team-building settings to their defaults?")) { root.cfg = cfgNorm(null); UI.team = null; save(); show(); } break;
   }
 }
 function msg(t, bad) { const m = $("dmsg"); if (m) m.innerHTML = `<div class="${bad ? "err" : "okmsg"}">${esc(t)}</div>`; }
 function onChange(e) {
   const el = e.target, a = el.dataset.act, id = el.dataset.id, i = +el.dataset.i, v = el.value;
+  if (el.dataset.cfg) { setCfg(el.dataset.cfg, el); return; }
   if (el.id === "impf") {
     const f = el.files[0]; if (!f) return;
     f.text().then(t => {
@@ -1328,8 +1426,8 @@ function onChange(e) {
     case "exadd": if (v && !root.team.excl.includes(+v)) root.team.excl.push(+v); save(); drawTeamCtl(); break;
     case "pradd": if (v && !root.team.prefs.includes(+v)) root.team.prefs.push(+v); save(); drawTeamCtl(); break;
     case "pind": root.team.pins[i].d = v === "" ? null : +v; save(); break;
-    case "ming": root.team.minG = v; save(); break;
-    case "alts": root.team.alts = Math.max(0, Math.min(30, +v || 0)); save(); break;
+    case "ming": root.team.minG = v; UI.team = null; save(); break;
+    case "alts": root.team.alts = Math.max(0, Math.min(30, +v || 0)); UI.team = null; save(); break;
     case "pus": root.plan.umas[id] = {...(root.plan.umas[id] || {}), s: +v}; save(); drawPlanner(); break;
     case "pup": root.plan.umas[id] = {...(root.plan.umas[id] || {}), p: +v}; save(); drawPlanner(); break;
     case "puh": {

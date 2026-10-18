@@ -11,39 +11,9 @@ Umamusume: Pretty Derby (Global). One `index.html` in the house style from
   skill by link. Options to put to Steve: an in-app skill pop-up (description from `skills.json`,
   plus which trainees and cards give it), or another site that has per-skill pages.
   Steve chose to leave them unlinked for now (2026-10-17). Revisit only if he raises it.
-- **Aces in team building (requested 2026-10-17, for later; rules settled with Steve).**
-  - **Interim, live since 2026-10-17:** after the normal solve, each race marks one Ace and
-    lists it first. The Ace is that race's highest-scoring Must include runner, or its
-    highest-scoring runner if it has no pin. Nothing below is built yet.
-  - **Rules.** Aces earn bonus points in Team Trials. Each race (Sprint, Mile, Medium, Long,
-    Dirt) has exactly one ace, listed in that race's first slot.
-  - **Who becomes ace.** The builder decides; nothing is flagged. Make as many Must include
-    trainees aces as possible. Not every pin can be one: seven pins means at least two are not,
-    and if none of five pins can run Dirt, only four can be aces.
-  - **No point value needed.** The goal is to maximise the number of pinned aces, then build the
-    best team around that.
-  - **Two builds, shown side by side or switchable** (Steve, 2026-10-17):
-    - **Best:** the current solve, with Must include honoured. Each race's ace is its
-      highest-scoring member, whether pinned or not.
-    - **Priority ace:** the two-stage solve below. Pins become aces wherever possible. A race
-      without a pinned ace takes its highest-scoring member.
-    In both, the ace's small bonus goes to whoever is ace, so the ace is always the race's best
-    runner unless the priority rule says otherwise.
-  - **Reference:** GameTora has a Team Trials scoring page (`gametora.com/umamusume/team-trials-pvp-scoring`).
-    Read it before building this, to see how the ace bonus is actually scored.
-  - **Not the Aces tab.** That tab is for user-entered aces in a different game mode and has
-    nothing to do with this.
-  - **Priority-ace build, in two stages:**
-    1. Max-cardinality matching of pins to races. A pin can match a race if it has an eligible
-       slot there and its own race lock allows it. Ties go to the higher slot score. Each matched
-       pin is that race's ace, so fix its race.
-    2. Run the usual team solve with those races fixed; unmatched pins stay free.
-  - **Display:** mark aces in the team table (first in their race block, with a marker) and keep them first in
-    alternatives.
-  - **Why not one flow model:** pinned and unpinned runners merge at the shared style-slot
-    bottleneck, so a single min-cost flow can't count pinned aces per race. That is why the
-    matching runs as its own stage.
-
+- **Ace bonus check.** Read GameTora's Team Trials scoring page
+  (`gametora.com/umamusume/team-trials-pvp-scoring`) to confirm how the ace bonus is scored. The
+  model gives the ace no point value; it only decides who is ace.
 
 - **Check the effect interpolation against the game.** `effAt()` interpolates linearly
   between GameTora's breakpoints (Lv 1, 5, 10 … 50) and floors. Effects with no value before
@@ -52,13 +22,31 @@ Umamusume: Pretty Derby (Global). One `index.html` in the house style from
   They get a flat `COND_UNIQUE` score credit and an asterisk.
 - Planner's Items table and the Inventory tab share `root.plan.inv`. Planner is target-based and
   Inventory is max-everything. If Planner ends up redundant, fold it into Inventory.
-- Team builder ideas: weighting a race by your own priorities;
+- Team builder ideas: weighting a race by your own priorities (per-race weights are now in Settings, but there is no race-priority weight);
   "has this trainee's unique skill reached Lv X" (star level).
 - Deck scoring ignores the deck's trainee: growth bonuses, distance and the scenario. A per-trainee
   weighting (e.g. Long trainee → stamina cards worth more) would be the next step.
 
 ## Decided
 
+- **Aces** (built 2026-10-18). Each race has one ace, listed first with a gold "Ace" tag. The
+  Settings checkbox "Force must include into ace role?" (`cfg.forceAce`, on by default) picks
+  the rule. The builder picks these aces. That's unrelated to the Aces tab, which holds aces the user
+  enters for a different game mode.
+  - **On:** `aceMatch()` first matches Must include trainees to distinct races: most aces first,
+    then best fit. A pin qualifies for a race when it has a slot there at Lowest aptitude and its
+    race lock allows it. It searches every assignment, remembering results by race and pins used.
+    Matched pins are locked to their race and the usual solve runs; unmatched pins stay free.
+    Each race's ace is its matched pin, else its best pinned runner, else its best runner.
+  - **Off:** the plain best team, with each race's highest-scoring runner as ace.
+  - **Test, 2026-10-18:** 7 pins that cluster 3 Sprint / 3 Mile / 1 Medium in the best team.
+    On spread them to ace all 5 races, at a cost of 13.7 points (1584.6 vs 1598.3).
+  - **Why two stages and not one flow:** pinned and unpinned runners merge at the shared style
+    slot, so a single min-cost flow can't count pinned aces per race.
+- **Settings tab** (`root.cfg`, defaults in `CFG_DEF`, shape repaired by `cfgNorm`). It holds
+  every team-building value: grade factors S–D, extra-fix ×, Prefer bonus, growth and base-stat
+  weights, the per-race stat weights, Force ace, plus Lowest aptitude and Alternatives (mirrored
+  from Teams). Any change drops the built team so the next Build uses the new values.
 - **Star-up shard costs** are 50 / 100 / 200 / 300 per step (650 from 1★ to 5★). These came
   from JP guides, and Steve confirmed them for Global on 2026-10-17.
 - **Hint-level costs** (`HINT_COST`, confirmed by Steve 2026-10-17). They apply to the 3 innate

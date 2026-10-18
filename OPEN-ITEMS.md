@@ -6,10 +6,6 @@ Umamusume: Pretty Derby (Global). One `index.html` in the house style from
 
 ## To do
 
-- **Remove the temporary Trials seed when Steve says.** It's `SEED_TT`, `seedTT()` and the
-  startup line marked TEMPORARY, added 2026-10-18. It loads his sheet's 15 TT matches once into
-  an empty log so they get into his browser's storage. The `seeded` flag can stay.
-
 - **Skill links.** Trainee and card panels now link to their GameTora pages. Skill names
   aren't linked: GameTora has no page per skill, and its skills list can't be opened at a given
   skill by link. Options to put to Steve: an in-app skill pop-up (description from `skills.json`,
@@ -55,7 +51,8 @@ Umamusume: Pretty Derby (Global). One `index.html` in the house style from
     placement average matched. Std Dev differs on purpose: the sheet's High, Low and SD formulas
     cover columns 1–10, the oldest 10, since column 15 is newest. The app uses the same window as
     the average.
-  - **Not imported:** the sheet's history, at Steve's choice. He starts empty.
+  - **The sheet's history was loaded once** into Steve's own browser (2026-10-18) by a temporary
+    seed, since removed. The app starts empty for everyone else.
   - **Inflation-free tests** (2026-10-18; Steve: "points naturally rise over time"). The trainee
     verdict, "Δ adj" and "Need" use each score as a share of the other 14 in the same match.
     Before/After still show raw averages; Race Δ and Team Δ stay raw.

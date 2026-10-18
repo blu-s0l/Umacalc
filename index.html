@@ -1341,36 +1341,6 @@ function ttNorm(x) {
   if (x.ver && typeof x.ver === "object") for (const id in x.ver) if (UBY[id] && +x.ver[id] > 1) d.ver[id] = Math.round(+x.ver[id]);
   return d;
 }
-// TEMPORARY (2026-10-18, Steve's request): seed the Trials log once with the 15 matches from the
-// "TT" tab of his sheet, oldest first. Remove SEED_TT and seedTT() when he says to; the
-// `seeded` flag then just stays behind harmlessly.
-const SEED_TT = {
-  // race order Sprint, Mile, Medium, Long, Dirt; [name, card id or null = owned/first outfit, scores, placings]
-  g: [
-    [["Curren Chan", null, [78863,84455,53837,80107,60089,62844,65817,81679,67373,77716,66222,79240,80624,65505,73836], [1,1,3,1,4,1,2,1,2,1,2,1,1,2,1]],
-     ["Sakura Bakushin O", null, [42763,61872,62523,38119,56459,54433,46983,60285,43656,49944,63403,47263,63102,46133,58905], [12,3,1,6,3,6,5,3,6,6,3,5,3,12,4]],
-     ["King Halo", null, [59129,48651,54846,57039,70008,47742,73053,46201,52954,57845,70512,58799,50313,56489,42560], [3,5,2,4,1,5,1,5,4,5,1,2,5,3,3]]],
-    [["Maruzensky", null, [52026,63196,58730,53506,63135,54743,81805,63591,53374,40610,55249,48362,52683,45622,49906], [12,2,4,12,5,6,1,3,4,12,5,11,6,10,8]],
-     ["Mejiro Dober", null, [40081,38808,49384,43766,55562,51175,59506,43662,37742,28499,56464,47262,53401,65524,54675], [8,6,6,6,4,4,2,5,6,8,3,4,3,2,5]],
-     ["Hishi Amazon", null, [44598,50620,82396,41657,67750,59894,51745,40284,54363,54460,49554,63862,48625,65526,54396], [6,5,1,10,1,2,5,6,5,4,6,3,5,4,3]]],
-    [["Air Groove", null, [54946,76238,63874,48534,69859,72215,46210,76136,79625,57850,52210,76037,38130,39773,60118], [4,1,2,4,1,1,4,1,1,4,4,1,8,10,2]],
-     ["Agnes Tachyon", null, [55889,57494,49665,63680,61540,47241,55085,58595,57166,26524,70861,55703,77574,61572,64822], [5,3,5,3,2,6,5,3,5,12,1,3,1,3,4]],
-     ["Gold Ship", 100702, [60405,47016,61518,44901,56742,48789,79092,46200,44785,40069,49690,55141,39912,62420,46221], [2,7,4,10,4,5,1,6,6,11,9,5,11,2,6]]],
-    [["Rice Shower", null, [77448,64359,80351,57595,80266,89103,83323,78466,64457,58141,64601,62345,73559,55269,89569], [1,2,1,3,2,1,1,1,5,4,2,3,1,4,1]],
-     ["Special Week", 100103, [58712,50763,56435,54499,59281,52865,49386,43101,52255,39785,55899,47263,51800,44626,53831], [2,3,2,5,3,4,4,6,4,5,4,5,4,5,2]],
-     ["Symboli Rudolf", null, [51520,40215,43742,48005,33721,46397,40825,43100,37179,44582,39807,55422,42459,41066,49322], [5,6,9,6,9,6,9,5,10,6,6,4,11,12,5]]],
-    [["Haru Urara", null, [67515,64360,70602,64613,73364,72706,54181,55132,57166,83850,56710,51038,56466,73402,81422], [3,2,1,2,3,1,5,3,5,1,3,5,6,1,1]],
-     ["El Condor Pasa", null, [50243,41619,55701,80188,44036,50406,48647,37747,58588,45993,65215,71116,44407,57335,49467], [4,5,2,1,4,3,4,4,3,6,2,1,5,2,5]],
-     ["Smart Falcon", null, [59559,40496,49163,46307,68597,56072,75951,53804,62810,55870,51663,51848,63083,61572,58623], [2,6,5,5,2,4,1,2,2,3,4,4,4,3,3]]],
-  ],
-};
-function seedTT(r) {
-  const card = (name, id) => (id && UBY[id]) || UMAS.find(u => u.n === name && r.umas[u.id]) || UMAS.find(u => u.n === name && u.en);
-  const rows = SEED_TT.g.map(race => race.map(([name, id, sc, pl]) => ({u: card(name, id), sc, pl})));
-  if (rows.flat().some(x => !x.u)) return;
-  for (let m = 0; m < 15; m++) r.tt.rounds.push({t: 0, e: rows.flatMap((race, di) => race.map(x => ({id: x.u.id, di, sc: x.sc[m], pl: x.pl[m], v: 1})))});
-  if (r.tt.lineup.flat().every(x => !x)) r.tt.lineup = rows.map(race => race.map(x => x.u.id));
-}
 const curV = id => root.tt.ver[id] || 1;
 const vKey = (id, v) => id + ":" + (v || 1);
 const vName = (id, v, other) => esc(UBY[id].n) + (v > 1 || other ? ` <span class="muted mono">v${v}</span>` : "");
@@ -1834,8 +1804,6 @@ window.addEventListener("scroll", syncTop, {passive: true});
 totop.addEventListener("click", () => window.scrollTo({top: 0, behavior: "smooth"}));
 
 $("foot").innerHTML = `Umacalc ${VERSION}<span class="vbar">|</span>Data and images ${esc(D.built)} from <a href="https://gametora.com/umamusume" target="_blank" rel="noopener">GameTora</a><span class="vbar">|</span>Umamusume: Pretty Derby © Cygames, Inc. Unofficial fan tool.`;
-// TEMPORARY, see SEED_TT: load the sheet's matches once into an empty Trials log.
-if (!root.tt.rounds.length && !root.tt.seeded) { seedTT(root); root.tt.seeded = true; save(); }
 drawBanner();
 go();
 </script>

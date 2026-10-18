@@ -52,6 +52,21 @@ Umamusume: Pretty Derby (Global). One `index.html` in the house style from
     cover columns 1–10, the oldest 10, since column 15 is newest. The app uses the same window as
     the average.
   - **Not imported:** the sheet's history, at Steve's choice. He starts empty.
+  - **Inflation-free tests** (2026-10-18; Steve: "points naturally rise over time"). The trainee
+    verdict, "Δ adj" and "Need" use each score as a share of the other 14 in the same match.
+    Before/After still show raw averages; Race Δ and Team Δ stay raw.
+  - **"Need":** the extra matches the gap seen so far needs to reach |t| = 2, or "can't confirm"
+    when the gap is too small to prove against the before sample. Rough guide from his sheet's
+    spread (CV ≈ 16%): a +12k swap shows in about 4–5 matches, +8k in about 10, under about 5k
+    never.
+  - **Reverts:** swapping back to whoever the race's last swap took out marks that swap
+    "reverted at N" and adds a Revert row with no test. The trainee's stats were never split.
+    A swap's "before" is the outgoing copy's own last N matches in that race, so it reaches back
+    past a revert.
+  - **Copies (v1, v2 …):** `root.tt.ver[id]` is the current trained copy of a card; entries store
+    `e.v`. "+v" on a lineup slot starts the next copy, and "−v" takes it back until it has a
+    match. A new copy is tested as "v1 → v2", like a swap. Trainee stats and the replace ranking
+    use the current copy only.
 
 - **Aces** (built 2026-10-18, made per pin the same day). Each race has one ace, listed first with
   a gold "Ace" tag. Each Must include row has an **Ace** tick (`pin.ace`). The builder picks these

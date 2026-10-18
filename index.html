@@ -235,7 +235,9 @@ table.swt td input{width:72px;padding:4px 6px;font-family:var(--mono);text-align
 /* trials */
 .ttline,.ttgrid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:12px}
 .ttline>div{display:flex;flex-direction:column;gap:5px}
-.ttline select{width:100%}
+.ttline select{flex:1;min-width:0}
+.ttslot{display:flex;align-items:center;gap:4px}
+.ttslot .mono{font-size:11px}
 .ttrow{display:flex;align-items:center;gap:5px;margin-top:5px}
 .ttrow .nm{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:12.5px}
 .ttrow input{width:76px;text-align:right;font-family:var(--mono)}
@@ -1326,15 +1328,22 @@ VIEWS.hints = () => { view.innerHTML = `<div class="card" id="pH"></div>`; drawH
 // A match is {t: time, e: [{id, di, sc, pl}] × 15}: who ran which race, their score and their
 // placing. Each match records its own lineup, so replacements are read from the log itself and
 // nothing like the sheet's "Prior" column has to be kept by hand.
+// Versions: in Team Trials you run trained copies, so "upgrading" is often a newly trained copy of
+// the same card. `ver` holds each card's current copy number (1 when absent), and every entry
+// stores the copy it was (e.v), so copy 2 is tested against copy 1 like any other swap.
 function ttNorm(x) {
-  const d = {lineup: DISTS.map(() => [null, null, null]), rounds: []};
+  const d = {lineup: DISTS.map(() => [null, null, null]), rounds: [], ver: {}};
   if (!x || typeof x !== "object") return d;
   if (Array.isArray(x.lineup)) d.lineup = DISTS.map((_, di) => [0, 1, 2].map(k => {
     const v = x.lineup[di] && x.lineup[di][k]; return UBY[v] ? v : null; }));
   if (Array.isArray(x.rounds)) d.rounds = x.rounds.filter(r => r && Array.isArray(r.e)).map(r => ({t: +r.t || 0,
-    e: r.e.filter(e => e && UBY[e.id] && e.di >= 0 && e.di < 5).map(e => ({id: e.id, di: e.di, sc: +e.sc || 0, pl: +e.pl || 0}))}));
+    e: r.e.filter(e => e && UBY[e.id] && e.di >= 0 && e.di < 5).map(e => ({id: e.id, di: e.di, sc: +e.sc || 0, pl: +e.pl || 0, v: Math.max(1, +e.v || 1)}))}));
+  if (x.ver && typeof x.ver === "object") for (const id in x.ver) if (UBY[id] && +x.ver[id] > 1) d.ver[id] = Math.round(+x.ver[id]);
   return d;
 }
+const curV = id => root.tt.ver[id] || 1;
+const vKey = (id, v) => id + ":" + (v || 1);
+const vName = (id, v, other) => esc(UBY[id].n) + (v > 1 || other ? ` <span class="muted mono">v${v}</span>` : "");
 const ttWin = () => Math.max(3, Math.round(cfg().ttN));
 function stat(xs) {
   const n = xs.length;
@@ -1344,27 +1353,60 @@ function stat(xs) {
   return {n, m, sd, hi: Math.max(...xs), lo: Math.min(...xs), cv: m ? sd / m : 0};
 }
 const ttRange = (from, to) => root.tt.rounds.slice(Math.max(0, from), to);
-// One trainee's entries in one race, oldest first.
-const ttOf = (rs, id, di) => rs.flatMap(r => r.e.filter(e => e.id === id && e.di === di));
+// One trainee's entries in one race, oldest first; v limits it to one trained copy.
+const ttOf = (rs, id, di, v) => rs.flatMap(r => r.e.filter(e => e.id === id && e.di === di && (v == null || (e.v || 1) === v)));
 const raceTotal = (r, di) => r.e.filter(e => e.di === di).reduce((a, e) => a + e.sc, 0);
 const teamTotal = r => r.e.reduce((a, e) => a + e.sc, 0);
-// Replacements, read from consecutive matches: in a race, whoever left and whoever arrived.
+// Scores drift up over time, so swaps are judged on an inflation-free figure: the trainee's score
+// as a share of the average of the other 14 in that same match (1.10 = 10% above teammates).
+const relScore = (r, e) => { const o = r.e.filter(x => x !== e); return o.length ? e.sc / (o.reduce((a, x) => a + x.sc, 0) / o.length) : 1; };
+const relOf = (rs, id, di, v) => rs.flatMap(r => r.e.filter(e => e.id === id && e.di === di && (e.v || 1) === v).map(e => relScore(r, e)));
+// Replacements, read from consecutive matches: in a race, whichever copy left and whichever
+// arrived (a new copy of the same card counts). Swapping back to whoever an earlier swap took
+// out, before anything else changed in that race, is a revert: it closes that test instead of
+// opening a new one.
 function ttChanges() {
   const R = root.tt.rounds, out = [];
+  const keys = (r, di) => r.e.filter(e => e.di === di).map(e => vKey(e.id, e.v));
   for (let i = 1; i < R.length; i++) for (let di = 0; di < 5; di++) {
-    const prev = R[i - 1].e.filter(e => e.di === di).map(e => e.id), cur = R[i].e.filter(e => e.di === di).map(e => e.id);
-    const gone = prev.filter(id => !cur.includes(id)), came = cur.filter(id => !prev.includes(id));
-    gone.forEach((id, j) => { if (came[j] != null) out.push({at: i, di, out: id, in: came[j]}); });
+    const prev = keys(R[i - 1], di), cur = keys(R[i], di);
+    const gone = prev.filter(k => !cur.includes(k)), came = cur.filter(k => !prev.includes(k));
+    // Pair a new copy with its own card's old copy first, then whatever is left in order.
+    const pairs = [];
+    gone.slice().forEach(g => { const c = came.find(k => k.split(":")[0] === g.split(":")[0]); if (c) { pairs.push([g, c]); gone.splice(gone.indexOf(g), 1); came.splice(came.indexOf(c), 1); } });
+    gone.forEach((g, j) => { if (came[j] != null) pairs.push([g, came[j]]); });
+    pairs.forEach(([g, c]) => {
+      const [oi, ov] = g.split(":").map(Number), [ni, nv] = c.split(":").map(Number);
+      const ch = {at: i, di, out: oi, ov, in: ni, nv};
+      const last = [...out].reverse().find(x => x.di === di);
+      if (last && !last.revert && !last.revertedAt && last.at < i && last.in === oi && last.nv === ov && last.out === ni && last.ov === nv) {
+        ch.revert = last; last.revertedAt = i;
+      }
+      out.push(ch);
+    });
   }
   return out;
 }
 // Did "after" really move from "before"? Welch's t on the two samples. |t| ≥ 2 is called a real
 // change; fewer than 3 matches since the swap is too early to say anything.
+function welch(a, b) {
+  const A = stat(a), B = stat(b), se = Math.sqrt(A.sd ** 2 / A.n + B.sd ** 2 / B.n);
+  return se ? (B.m - A.m) / se : (B.m - A.m) * Infinity || 0;
+}
 function verdict(a, b) {
   if (b.length < 3 || a.length < 2) return "Too early";
-  const A = stat(a), B = stat(b), se = Math.sqrt(A.sd ** 2 / A.n + B.sd ** 2 / B.n);
-  const t = se ? (B.m - A.m) / se : B.m - A.m;
+  const t = welch(a, b);
   return t >= 2 ? "Better" : t <= -2 ? "Worse" : "Unclear";
+}
+// Matches still needed after a swap for the gap seen so far, if it holds, to reach |t| = 2.
+// Uses the same spread as the samples; null = the gap is too small to confirm against this many
+// "before" matches, however long you wait.
+function needMore(a, b) {
+  if (a.length < 2 || !b.length) return undefined;
+  const A = stat(a), B = stat(b), sb = b.length > 1 ? B.sd : A.sd;
+  const room = ((B.m - A.m) / 2) ** 2 - A.sd ** 2 / A.n;
+  if (room <= 0) return null;
+  return Math.max(0, Math.ceil(sb ** 2 / room) - b.length);
 }
 const pct = (a, b) => a ? (b / a - 1) * 100 : 0;
 const fPct = v => `<span class="${v > 0 ? "pos" : v < 0 ? "neg" : ""}">${v > 0 ? "+" : ""}${v.toFixed(1)}%</span>`;
@@ -1389,13 +1431,18 @@ function drawTrials() {
   const ids = L.flat().filter(Boolean), chars = ids.map(id => UBY[id].c);
   const dup = chars.length !== new Set(chars).size;
   $("ttLine").innerHTML = `<div class="head">Lineup</div><div class="ttline">${DISTS.map((d, di) => `<div><label>${d.n}</label>
-    ${[0, 1, 2].map(k => `<select class="mini" data-act="ttl" data-di="${di}" data-k="${k}">${opts(uo, L[di][k] || "")}</select>`).join("")}</div>`).join("")}</div>
+    ${[0, 1, 2].map(k => { const id = L[di][k], v = id ? curV(id) : 1;
+      // "New copy" starts the next copy of this card; until it has a match it can be taken back.
+      const fresh = id && v > 1 && !ttOf(R, id, di, v).length;
+      return `<div class="ttslot"><select class="mini" data-act="ttl" data-di="${di}" data-k="${k}">${opts(uo, id || "")}</select>
+        ${id ? `<span class="mono muted">v${v}</span><button class="x" data-act="ttver" data-id="${id}" data-d="${fresh ? -1 : 1}" title="${fresh ? "Undo new copy" : "New trained copy"}">${fresh ? "−v" : "+v"}</button>` : ""}</div>`; }).join("")}</div>`).join("")}</div>
     ${dup ? `<div class="banner amber" style="margin-top:10px">A trainee appears twice</div>` : ""}`;
   drawTtEntry();
   // Trainees in the current lineup, over the last N matches each ran in that race.
   const rows = [];
   DISTS.forEach((d, di) => L[di].forEach(id => { if (id) {
-    const es = ttOf(R, id, di).slice(-N), s = stat(es.map(e => e.sc)), p = stat(es.filter(e => e.pl).map(e => e.pl));
+    // Current trained copy only: an older copy's results say nothing about this one.
+    const es = ttOf(R, id, di, curV(id)).slice(-N), s = stat(es.map(e => e.sc)), p = stat(es.filter(e => e.pl).map(e => e.pl));
     rows.push({id, di, es, s, p, risk: s ? s.m - cfg().ttRisk * s.sd : null});
   }}));
   const ms = rows.filter(r => r.s).map(r => r.s.m), lo = Math.min(...ms), hi = Math.max(...ms);
@@ -1424,27 +1471,38 @@ function drawTrials() {
     ${ts ? `<tr class="tot"><td>Team</td><td class="num gold">${n(ts.m)}</td><td></td><td class="num">${ts.n > 1 ? n(ts.sd) : ""}</td><td class="num">${n(ts.hi)}</td><td class="num">${n(ts.lo)}</td><td></td></tr>` : ""}</tbody></table>`;
   // Replacements: the replaced trainee's last N matches in that race against the newcomer's
   // matches since, and the same windows for the race total and the whole team (placement bonuses
-  // mean a swap can lift or sink teammates too). Each window stops at the race's previous or next swap.
+  // mean a swap can lift or sink teammates too).
   const ch = ttChanges();
   const sw = ch.map((c, i) => {
-    const prevAt = Math.max(0, ...ch.slice(0, i).filter(x => x.di === c.di).map(x => x.at));
     const next = ch.slice(i + 1).find(x => x.di === c.di), nextAt = next ? next.at : R.length;
-    const before = ttRange(Math.max(prevAt, c.at - N), c.at), after = ttRange(c.at, Math.min(nextAt, c.at + N));
-    const a = ttOf(before, c.out, c.di), b = ttOf(after, c.in, c.di);
+    const same = c.out === c.in, who = `${vName(c.out, c.ov, same)} → ${vName(c.in, c.nv, same)}`;
+    if (c.revert) return `<tr class="off"><td class="num">${c.at + 1}</td><td>${DISTS[c.di].n}</td><td>${who}</td>
+      <td colspan="9"><span class="pill mute">Revert</span> <span class="muted">undoes match ${c.revert.at + 1}</span></td></tr>`;
+    // Before: the outgoing copy's own last N matches in this race, reaching back past any revert
+    // (a reverted swap means it was never really gone). After: matches since, up to the race's
+    // next swap.
+    const before = R.slice(0, c.at).filter(r => r.e.some(e => e.id === c.out && e.di === c.di && (e.v || 1) === c.ov)).slice(-N);
+    const after = ttRange(c.at, Math.min(nextAt, c.at + N));
+    const a = ttOf(before, c.out, c.di, c.ov), b = ttOf(after, c.in, c.di, c.nv);
+    // The test runs on inflation-free relative scores; Before/After show the raw averages.
+    const ar = relOf(before, c.out, c.di, c.ov), br = relOf(after, c.in, c.di, c.nv);
+    const v = verdict(ar, br), need = needMore(ar, br);
+    const needTxt = v === "Better" || v === "Worse" || need === undefined ? "" : need === null ? "can't confirm" : need ? `~${need}` : "";
     const ra = before.map(r => raceTotal(r, c.di)), rb = after.map(r => raceTotal(r, c.di));
     const ta = before.map(teamTotal), tb = after.map(teamTotal);
     const sa = stat(a.map(e => e.sc)), sb = stat(b.map(e => e.sc));
     const pa = stat(a.filter(e => e.pl).map(e => e.pl)), pb = stat(b.filter(e => e.pl).map(e => e.pl));
-    return `<tr><td class="num">${c.at + 1}</td><td>${DISTS[c.di].n}</td><td>${esc(UBY[c.out].n)} → ${esc(UBY[c.in].n)}</td>
+    return `<tr><td class="num">${c.at + 1}</td><td>${DISTS[c.di].n}</td><td>${who}</td>
       <td class="num">${sa ? n(sa.m) : ""}<span class="muted"> ${sa ? sa.n : ""}</span></td><td class="num">${sb ? n(sb.m) : ""}<span class="muted"> ${sb ? sb.n : ""}</span></td>
-      <td class="num">${sa && sb ? fPct(pct(sa.m, sb.m)) : ""}</td><td>${vPill(verdict(a.map(e => e.sc), b.map(e => e.sc)))}</td>
+      <td class="num">${ar.length && br.length ? fPct(pct(stat(ar).m, stat(br).m)) : ""}</td>
+      <td>${vPill(v)}${c.revertedAt ? ` <span class="muted">reverted at ${c.revertedAt + 1}</span>` : ""}</td><td class="num muted">${needTxt}</td>
       <td class="num">${ra.length && rb.length ? fPct(pct(stat(ra).m, stat(rb).m)) : ""}</td>
       <td class="num">${ta.length && tb.length ? fPct(pct(stat(ta).m, stat(tb).m)) : ""}</td><td>${vPill(verdict(ta, tb))}</td>
       <td class="num">${pa && pb ? `${pa.m.toFixed(2)} → ${pb.m.toFixed(2)}` : ""}</td></tr>`;
   }).reverse().join("");
   $("ttSwaps").innerHTML = `<div class="head">Replacements</div>
-    <table><thead><tr><th class="num">Match</th><th>Race</th><th>Out → In</th><th class="num">Before</th><th class="num">After</th><th class="num">Δ</th><th>Trainee</th>
-      <th class="num">Race Δ</th><th class="num">Team Δ</th><th>Team</th><th class="num">Place</th></tr></thead><tbody>${sw || `<tr><td colspan="11" class="muted">—</td></tr>`}</tbody></table>`;
+    <table><thead><tr><th class="num">Match</th><th>Race</th><th>Out → In</th><th class="num">Before</th><th class="num">After</th><th class="num" title="Share of teammates' average, so score inflation cancels">Δ adj</th><th>Trainee</th><th class="num">Need</th>
+      <th class="num">Race Δ</th><th class="num">Team Δ</th><th>Team</th><th class="num">Place</th></tr></thead><tbody>${sw || `<tr><td colspan="12" class="muted">—</td></tr>`}</tbody></table>`;
   // Match log, newest first.
   $("ttLog").innerHTML = `<div class="head">Matches<span class="vbar">|</span>${R.length}</div>
     <table><thead><tr><th class="num">#</th><th>Date</th><th class="num">Team</th>${DISTS.map(d => `<th class="num">${d.n}</th>`).join("")}<th></th></tr></thead><tbody>
@@ -1471,7 +1529,7 @@ function ttSave() {
   const R = root.tt.rounds, edit = UI.ttEdit != null && R[UI.ttEdit];
   const src = edit ? edit.e : DISTS.flatMap((d, di) => root.tt.lineup[di].map(id => ({id, di})));
   const val = (k, j) => { const el = view.querySelector(`input[data-tt="${k}"][data-j="${j}"]`); return el ? el.value.replace(/[,\s]/g, "") : ""; };
-  const e = src.map((x, j) => ({id: x.id, di: x.di, sc: Math.round(+val("sc", j)), pl: Math.round(+val("pl", j))}));
+  const e = src.map((x, j) => ({id: x.id, di: x.di, sc: Math.round(+val("sc", j)), pl: Math.round(+val("pl", j)), v: edit ? (x.v || 1) : curV(x.id)}));
   const bad = e.filter(x => !(x.sc > 0) || !(x.pl >= 1 && x.pl <= 18)).length;
   if (bad) { drawTtEntry(`${bad} of 15 rows need a score and a placement.`); return; }
   if (edit) edit.e = e; else R.push({t: Date.now(), e});
@@ -1587,6 +1645,7 @@ function onClick(e) {
       UI.ttEdit = null; save(); location.hash = "trials"; break;
     }
     case "ttsave": ttSave(); break;
+    case "ttver": { const nv = curV(id) + +el.dataset.d; if (nv > 1) root.tt.ver[id] = nv; else delete root.tt.ver[id]; save(); drawTrials(); break; }
     case "ttcancel": UI.ttEdit = null; drawTrials(); break;
     case "ttedit": UI.ttEdit = i; drawTrials(); $("ttEntry").scrollIntoView({behavior: "smooth", block: "start"}); break;
     case "ttdel":

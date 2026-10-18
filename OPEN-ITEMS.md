@@ -10,6 +10,7 @@ Umamusume: Pretty Derby (Global). One `index.html` in the house style from
   aren't linked: GameTora has no page per skill, and its skills list can't be opened at a given
   skill by link. Options to put to Steve: an in-app skill pop-up (description from `skills.json`,
   plus which trainees and cards give it), or another site that has per-skill pages.
+  Steve chose to leave them unlinked for now (2026-10-17). Revisit only if he raises it.
 - **Aces in team building (requested 2026-10-17, for later; rules settled with Steve).**
   - **Rules.** Aces earn bonus points in Team Trials. Each race (Sprint, Mile, Medium, Long,
     Dirt) has exactly one ace, listed in that race's first slot.

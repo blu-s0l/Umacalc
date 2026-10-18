@@ -99,8 +99,9 @@ Umamusume: Pretty Derby (Global). One `index.html` in the house style from
   multiplies every training gain, while base stats are a one-time head start. Aptitude dominates; stats
   only break ties. "Sparks" = grade steps short of A, summed (B = 1, C = 2).
 - **Prefer list:** +8 to that card's slots, about one B, so it wins any slot it is within
-  8 points of. Teams are ranked by score plus that bonus. The displayed score never includes
-  it, so totals stay comparable. Marked ♡ in the team table. Pins (⚑) stay at +1000.
+  8 points of. The bonus steers the solver, and so which teams get built. Since 2026-10-17 the
+  ranked table sorts by plain score, so a team without a preferred trainee can rank first if it
+  scores higher. The displayed score never includes the bonus. Marked ♡ in the team table. Pins (⚑) stay at +1000.
 - **Solver:** exact min-cost flow (character → race/style slot → race, capacity 3 per race).
   Pinned trainees get +1000 and may take any grade. Alternatives are re-solves with one
   best-team member banned, then a second round on the three strongest; ranked by score, highest

@@ -29,18 +29,18 @@ Umamusume: Pretty Derby (Global). One `index.html` in the house style from
 
 ## Decided
 
-- **Aces** (built 2026-10-18). Each race has one ace, listed first with a gold "Ace" tag. The
-  Settings checkbox "Force must include into ace role?" (`cfg.forceAce`, on by default) picks
-  the rule. The builder picks these aces. That's unrelated to the Aces tab, which holds aces the user
-  enters for a different game mode.
-  - **On:** `aceMatch()` first matches Must include trainees to distinct races: most aces first,
+- **Aces** (built 2026-10-18, made per pin the same day). Each race has one ace, listed first with
+  a gold "Ace" tag. Each Must include row has an **Ace** tick (`pin.ace`). The builder picks these
+  aces; that's unrelated to the Aces tab, which holds aces the user enters for another game mode.
+  - `aceMatch()` gives as many ticked pins as possible a race of their own: most aces first,
     then best fit. A pin qualifies for a race when it has a slot there at Lowest aptitude and its
     race lock allows it. It searches every assignment, remembering results by race and pins used.
-    Matched pins are locked to their race and the usual solve runs; unmatched pins stay free.
-    Each race's ace is its matched pin, else its best pinned runner, else its best runner.
-  - **Off:** the plain best team, with each race's highest-scoring runner as ace.
-  - **Test, 2026-10-18:** 7 pins that cluster 3 Sprint / 3 Mile / 1 Medium in the best team.
-    On spread them to ace all 5 races, at a cost of 13.7 points (1584.6 vs 1598.3).
+    Matched pins are locked to their race, then the usual solve runs.
+  - Each race's ace is its matched pin, else its best runner. Unticked pins are ordinary runners.
+  - A ticked pin that couldn't get a race is listed in an amber "Not ace" line. That happens when
+    two want the same race, more than five are ticked, or none of its races meets Lowest aptitude.
+  - This replaced the global Settings checkbox "Force must include into ace role?". Pins saved
+    before then take that checkbox's old value; it defaulted to on.
   - **Why two stages and not one flow:** pinned and unpinned runners merge at the shared style
     slot, so a single min-cost flow can't count pinned aces per race.
 - **Skills in the slot score** (2026-10-18). `build_data.py` tags each skill with the distances,
@@ -56,7 +56,7 @@ Umamusume: Pretty Derby (Global). One `index.html` in the house style from
   everyone. This replaced the dropdown on 2026-10-18.
 - **Settings tab** (`root.cfg`, defaults in `CFG_DEF`, shape repaired by `cfgNorm`). It holds
   every team-building value: grade factors S–D, extra-fix ×, Prefer bonus, growth and base-stat
-  weights, the per-race stat weights, Force ace, plus Lowest aptitude and Alternatives (mirrored
+  weights, the per-race stat weights, skill-match points, plus Lowest aptitude and Alternatives (mirrored
   from Teams). Any change drops the built team so the next Build uses the new values.
 - **Star-up shard costs** are 50 / 100 / 200 / 300 per step (650 from 1★ to 5★). These came
   from JP guides, and Steve confirmed them for Global on 2026-10-17.

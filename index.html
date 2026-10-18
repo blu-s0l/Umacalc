@@ -180,6 +180,8 @@ td.apt,th.apt{padding-left:4px;padding-right:4px;white-space:nowrap}
 .pinrow{display:flex;gap:6px;align-items:center;margin-bottom:6px;flex-wrap:wrap}
 .pinrow .nm{flex:1;min-width:0}
 .pinrow select{margin-left:auto}
+.pinrow label.pace{margin-left:auto;font-size:12px;color:var(--sub)}
+.pinrow label.pace+select{margin-left:0}
 .pinrow select{width:auto}
 .split{display:grid;grid-template-columns:1fr 1fr;gap:14px}
 /* planner trainee rows: targets on line 1, hint targets on line 2, items spanning both */
@@ -324,9 +326,8 @@ const STYLES = [{n: "Front", i: 6}, {n: "Pace", i: 7}, {n: "Late", i: 8}, {n: "E
 // - w: per-race stat weights [Spd, Sta, Pow, Gut, Wit] (see DISTS).
 // - skN / skG: points per own skill tied to the slot's distance, style or surface (normal / gold or
 //   unique). A trainee with two Mile skills scores a few points more in Mile; about a B at most.
-// - forceAce: give as many Must include trainees as possible a race of their own as its ace.
 const CFG_DEF = {g: {S: 1.03, A: 1, B: .93, C: .6, D: .3}, fix: .85, pref: 8, grow: .6, base: .25, skN: 1.5, skG: 3,
-                 forceAce: true, w: DISTS.map(d => d.w.slice())};
+                 w: DISTS.map(d => d.w.slice())};
 const cfg = () => root.cfg;
 function cfgNorm(c) {
   const d = JSON.parse(JSON.stringify(CFG_DEF));
@@ -334,7 +335,6 @@ function cfgNorm(c) {
   const num = (v, def) => typeof v === "number" && isFinite(v) && v >= 0 ? v : def;
   for (const g in d.g) d.g[g] = num(c.g && c.g[g], d.g[g]);
   for (const k of ["fix", "pref", "grow", "base", "skN", "skG"]) d[k] = num(c[k], d[k]);
-  if (typeof c.forceAce === "boolean") d.forceAce = c.forceAce;
   d.w = d.w.map((row, di) => row.map((v, i) => num(c.w && c.w[di] && c.w[di][i], v)));
   return d;
 }
@@ -372,6 +372,10 @@ function normalize(r) {
   }
   for (const k of ["team", "plan", "set", "inv"]) for (const kk in b[k]) if (r[k][kk] == null) r[k][kk] = b[k][kk];
   r.decks.forEach(normDeck);
+  // The global "Force must include into ace role" setting (on by default) became a per-pin Ace
+  // tick on 2026-10-18; carry it over to pins saved before then.
+  const wasForced = !(r.cfg && r.cfg.forceAce === false);
+  r.team.pins.forEach(p => { if (typeof p.ace !== "boolean") p.ace = wasForced; });
   r.cfg = cfgNorm(r.cfg);
   for (const id in r.tgt) if (r.umas[id]) delete r.tgt[id];
   // Pins lock a race only (2026-10-17); clear any style lock saved before that.
@@ -895,12 +899,12 @@ function solveTeam(pool, ban) {
   const rank = score + members.filter(m => pool.prefs.has(m.u.id)).length * cfg().pref;
   return {members, score, rank, sig, sparks: members.reduce((a, m) => a + m.f.sp, 0)};
 }
-// Force ace: give as many Must include trainees as possible a race of their own, as that race's
+// Give as many Ace-ticked Must include trainees as possible a race of their own, as that race's
 // ace. Most aces first, then best fit. A pin qualifies for a race when it has a slot there at the
 // Lowest aptitude setting and its own race lock allows it. Returns Map(race → character). A race
 // gets at most one pin this way; other pins stay free for the main solve.
 function aceMatch(pool) {
-  const pins = [...pool.pins.entries()];
+  const pins = [...pool.pins.entries()].filter(([, p]) => p.ace);
   const fit = pins.map(([c, p]) => DISTS.map((d, di) => {
     if (p.d != null && p.d !== di) return null;
     let best = null;
@@ -934,7 +938,7 @@ function aceMatch(pool) {
 }
 function buildTeams() {
   const base = teamPool();
-  const aces = cfg().forceAce ? aceMatch(base) : new Map();
+  const aces = aceMatch(base);
   // Each matched pin is locked to the race it will ace; the rest of the build is unchanged.
   const lock = new Map([...aces].map(([di, c]) => [c, di]));
   const pool = lock.size ? {...base, pins: new Map([...base.pins].map(([c, p]) => [c, lock.has(c) ? {...p, d: lock.get(c)} : p]))} : base;
@@ -971,6 +975,7 @@ function drawTeamCtl() {
   const pins = root.team.pins.map((p, i) => {
     const u = UBY[p.id]; if (!u) return "";
     return `<div class="pinrow"><span class="nm">${esc(u.n)} <span class="ttl">${esc(u.t)}</span></span>
+      <label class="ck pace"><input type="checkbox" data-act="pinace" data-i="${i}"${p.ace ? " checked" : ""}>Ace</label>
       <select class="mini" data-act="pind" data-i="${i}">${opts([["", "Any race"], ...DISTS.map((d, k) => [k, d.n])], p.d == null ? "" : p.d)}</select>
       <button class="x" data-act="pinx" data-i="${i}">×</button></div>`;
   }).join("");
@@ -1005,15 +1010,10 @@ function drawTeamOut() {
   let body = "";
   DISTS.forEach((d, di) => {
     const ms = t.members.filter(m => m.di === di);
-    // Ace, listed first. With Force ace on: the pin matched to this race, or failing that the
-    // race's best Must include runner. Otherwise, and as the fallback: the race's best runner.
+    // Ace, listed first: the Ace-ticked pin matched to this race, else the race's best runner.
     const top = list => list.reduce((a, m) => !a || m.f.sc > a.f.sc ? m : a, null);
-    let ace = null;
-    if (cfg().forceAce) {
-      const forced = aces && aces.get(di);
-      ace = (forced != null && ms.find(m => m.c === forced)) || top(ms.filter(m => pinned.has(m.c)));
-    }
-    if (!ace) ace = top(ms);
+    const forced = aces && aces.get(di);
+    const ace = (forced != null && ms.find(m => m.c === forced)) || top(ms);
     const order = ace ? [ace, ...ms.filter(m => m !== ace)] : ms;
     body += `<tr><td class="dh" colspan="8">${d.n}${d.n === "Dirt" ? " · Mile" : ""}<span class="muted" style="letter-spacing:0;text-transform:none;font-weight:400"> ${ms.length}/3</span></td></tr>`;
     order.forEach(m => {
@@ -1034,8 +1034,13 @@ function drawTeamOut() {
     <td class="num">${i ? (x.score - best.score).toFixed(1) : ""}</td><td class="num">${x.members.length}</td><td class="num">${x.sparks}</td>
     <td>${i ? diff(best, x) : '<span class="muted">best</span>'}</td>
     <td><button class="small" data-act="tview" data-i="${i}"${i === UI.teamIdx ? " disabled" : ""}>View</button></td></tr>`).join("");
+  // Ace-ticked pins that couldn't get a race of their own (two want the same race, more than
+  // five ticked, or no race at Lowest aptitude).
+  const placed = new Set(aces ? aces.values() : []);
+  const missed = root.team.pins.filter(p => p.ace && UBY[p.id] && !placed.has(UBY[p.id].c)).map(p => UBY[p.id].n);
   $("teamOut").innerHTML = `<div class="calbox"><div class="calans">${f1(t.score)}</div>
     <div class="calsub">Team <b>${UI.teamIdx + 1}</b> of ${teams.length}<span class="vbar">|</span><b>${t.members.length}</b>/15<span class="vbar">|</span>Sparks <b>${t.sparks}</b></div></div>
+    ${missed.length ? `<div class="banner amber">Not ace: ${missed.map(esc).join(", ")}</div>` : ""}
     <div class="card scroll"><table class="dist"><thead><tr><th>Style</th><th>Trainee</th><th class="num">Stars</th><th class="apt"><span>Sf</span><span>Ds</span><span>St</span></th><th class="num">Sparks</th><th class="num">Skills</th><th class="num">Score</th><th>Bench</th></tr></thead><tbody>${body}</tbody></table></div>
     <div class="card scroll"><div class="head">Ranked</div><table><thead><tr><th class="num">#</th><th class="num">Score</th><th class="num">Δ</th><th class="num">Size</th><th class="num">Sparks</th><th>vs best</th><th></th></tr></thead><tbody>${alts}</tbody></table></div>`;
 }
@@ -1284,7 +1289,6 @@ VIEWS.settings = () => {
   const c = cfg();
   const num = (path, v, step = ".01") => `<input type="number" step="${step}" min="0" data-cfg="${path}" value="${v}">`;
   view.innerHTML = `<div class="card"><div class="head">Team building</div>
-    <label class="ck" style="margin-bottom:14px"><input type="checkbox" data-cfg="forceAce"${c.forceAce ? " checked" : ""}>Force must include into ace role?</label>
     <div class="fields sfields">
       <div><label>Lowest aptitude</label><select data-act="ming">${opts([["A","A"],["B","B"],["C","C"]], root.team.minG)}</select></div>
       <div><label>Alternatives</label><input type="number" min="0" max="30" data-act="alts" value="${root.team.alts}"></div>
@@ -1304,13 +1308,9 @@ VIEWS.settings = () => {
 };
 // A settings change makes any built team stale, so drop it; the next Build uses the new values.
 function setCfg(path, el) {
-  const c = cfg(), ks = path.split(".");
-  if (path === "forceAce") c.forceAce = el.checked;
-  else {
-    const v = Math.max(0, +el.value || 0);
-    let o = c; for (let i = 0; i < ks.length - 1; i++) o = o[ks[i]];
-    o[ks[ks.length - 1]] = v;
-  }
+  const c = cfg(), ks = path.split("."), v = Math.max(0, +el.value || 0);
+  let o = c; for (let i = 0; i < ks.length - 1; i++) o = o[ks[i]];
+  o[ks[ks.length - 1]] = v;
   UI.team = null; save();
 }
 
@@ -1463,6 +1463,7 @@ function onChange(e) {
     case "exadd": if (v && !root.team.excl.includes(+v)) root.team.excl.push(+v); save(); drawTeamCtl(); break;
     case "pradd": if (v && !root.team.prefs.includes(+v)) root.team.prefs.push(+v); save(); drawTeamCtl(); break;
     case "pind": root.team.pins[i].d = v === "" ? null : +v; save(); break;
+    case "pinace": root.team.pins[i].ace = el.checked; save(); break;
     case "ming": root.team.minG = v; UI.team = null; save(); break;
     case "alts": root.team.alts = Math.max(0, Math.min(30, +v || 0)); UI.team = null; save(); break;
     case "pus": root.plan.umas[id] = {...(root.plan.umas[id] || {}), s: +v}; save(); drawPlanner(); break;

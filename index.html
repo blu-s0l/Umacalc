@@ -406,7 +406,7 @@ function save() {
   }
 }
 let root = load();
-const UI = {tq: "", tShow: [], tSort: ["name", 1],
+const UI = {tq: "", tShow: [], tShowAll: false, tSort: ["name", 1],
             tf: {surf: {on: [], g: "A", any: false, open: false},
                  dist: {on: [], g: "A", any: false, open: false},
                  sty:  {on: [], g: "A", any: false, open: false},
@@ -535,9 +535,10 @@ const tfSum = g => {
 // Show categories overlap on purpose (a JP-only trainee is also Not owned); ticked ones are OR'd.
 const SHOW = {own: u => !!root.umas[u.id], not: u => !root.umas[u.id], tgt: u => !!root.tgt[u.id], jp: u => jpOnly(u)};
 const SHOW_L = [["own", "Owned"], ["not", "Not owned"], ["tgt", "Target"], ["jp", "JP only"]];
-const showSum = () => SHOW_L.filter(([k]) => UI.tShow.includes(k)).map(([, n]) => n).join(" / ");
+const showSum = () => SHOW_L.filter(([k]) => UI.tShow.includes(k)).map(([, n]) => n).join(UI.tShowAll ? " + " : " / ");
 const showGrp = () => `<details class="fgrp" data-k="show"${UI.tf.show.open ? " open" : ""}><summary>Show <span class="gold" id="tfs-show">${esc(showSum())}</span></summary>
-  <div class="fpop"><div class="fbody">${SHOW_L.map(([k, n]) => `<label class="ck"><input type="checkbox" data-tshow="${k}"${UI.tShow.includes(k) ? " checked" : ""}>${n}</label>`).join("")}</div></div></details>`;
+  <div class="fpop"><div class="fbody">${SHOW_L.map(([k, n]) => `<label class="ck"><input type="checkbox" data-tshow="${k}"${UI.tShow.includes(k) ? " checked" : ""}>${n}</label>`).join("")}</div>
+  <div class="fbody"><select class="mini" data-tshowall="1">${opts([["1", "All"], ["0", "Any"]], UI.tShowAll ? 1 : 0)}</select></div></div></details>`;
 VIEWS.trainees = () => {
   const grp = g => {
     const f = UI.tf[g.k];
@@ -563,8 +564,8 @@ function drawTrainees() {
     const ok = f.on.map(i => GRADES.indexOf(u.a[i]) <= GRADES.indexOf(f.g));
     return f.any ? ok.some(Boolean) : ok.every(Boolean);
   });
-  // Show: any ticked category matches (Owned, Not owned, Target, JP only); none ticked = everyone.
-  const show = u => !UI.tShow.length || UI.tShow.some(k => SHOW[k](u));
+  // Show: ticked categories (Owned, Not owned, Target, JP only), matching any or all of them; none ticked = everyone.
+  const show = u => !UI.tShow.length || (UI.tShowAll ? UI.tShow.every(k => SHOW[k](u)) : UI.tShow.some(k => SHOW[k](u)));
   let list = UMAS.filter(u => (avail(u) || jpOnly(u))
     && (!q || (u.n + " " + u.t).toLowerCase().includes(q))
     && show(u) && passes(u));
@@ -1416,6 +1417,7 @@ function onChange(e) {
     });
     return;
   }
+  if (el.dataset.tshowall) { UI.tShowAll = v === "1"; $("tfs-show").textContent = showSum(); drawTrainees(); return; }
   if (el.dataset.tshow) {
     const k = el.dataset.tshow;
     UI.tShow = el.checked ? UI.tShow.concat(k) : UI.tShow.filter(x => x !== k);

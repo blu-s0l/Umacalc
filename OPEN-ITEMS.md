@@ -52,7 +52,7 @@ Umamusume: Pretty Derby (Global). One `index.html` in the house style from
   B. The team table's Skills column shows the count, with skill names on hover. Points are
   editable in Settings.
 - **Trainees → Show** is a checkbox group (Owned, Not owned, Target, JP only). Ticked categories
-  are combined with OR, so a trainee shows if it matches any of them, and nothing ticked shows
+  are combined with Any (OR, the default) or All (AND), so Target + JP only can mean either; nothing ticked shows
   everyone. This replaced the dropdown on 2026-10-18.
 - **Settings tab** (`root.cfg`, defaults in `CFG_DEF`, shape repaired by `cfgNorm`). It holds
   every team-building value: grade factors S–D, extra-fix ×, Prefer bonus, growth and base-stat

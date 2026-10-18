@@ -12,6 +12,9 @@ Umamusume: Pretty Derby (Global). One `index.html` in the house style from
   plus which trainees and cards give it), or another site that has per-skill pages.
   Steve chose to leave them unlinked for now (2026-10-17). Revisit only if he raises it.
 - **Aces in team building (requested 2026-10-17, for later; rules settled with Steve).**
+  - **Interim, live since 2026-10-17:** after the normal solve, each race marks one Ace and
+    lists it first. The Ace is that race's highest-scoring Must include runner, or its
+    highest-scoring runner if it has no pin. Nothing below is built yet.
   - **Rules.** Aces earn bonus points in Team Trials. Each race (Sprint, Mile, Medium, Long,
     Dirt) has exactly one ace, listed in that race's first slot.
   - **Who becomes ace.** The builder decides; nothing is flagged. Make as many Must include
@@ -100,7 +103,8 @@ Umamusume: Pretty Derby (Global). One `index.html` in the house style from
   it, so totals stay comparable. Marked ♡ in the team table. Pins (⚑) stay at +1000.
 - **Solver:** exact min-cost flow (character → race/style slot → race, capacity 3 per race).
   Pinned trainees get +1000 and may take any grade. Alternatives are re-solves with one
-  best-team member banned, then a second round on the three strongest; ranked by size, then score.
+  best-team member banned, then a second round on the three strongest; ranked by score, highest
+  first (2026-10-17).
 - **Support score** is a rough per-unit weighting (`W`) of effects at the card's current
   level. It ranks cards and fills decks. It is not a simulation.
 - Unowned cards are shown at LB4. A card with no stored level is at its LB's max level.

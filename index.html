@@ -175,6 +175,8 @@ td.apt,th.apt{padding-left:4px;padding-right:4px;white-space:nowrap}
 .dist td.dh{font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--gold);
             padding-top:12px;border-bottom:1px solid var(--line2)}
 .bench{font-size:11.5px;color:var(--mut)}
+.ace{display:inline-block;margin-left:6px;padding:0 6px;border:1px solid rgba(176,141,63,.55);border-radius:999px;
+     font-size:9.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--gold);vertical-align:1px}
 .pinrow{display:flex;gap:6px;align-items:center;margin-bottom:6px;flex-wrap:wrap}
 .pinrow .nm{flex:1;min-width:0}
 .pinrow select{margin-left:auto}
@@ -866,7 +868,8 @@ function buildTeams() {
   // three strongest of those, and rank everything that comes out.
   const lvl1 = expand(best, new Set()).sort((a, b) => b.rank - a.rank);
   lvl1.slice(0, 3).forEach(t => expand(t, t.ban));
-  const teams = [...seen.values()].sort((a, b) => b.members.length - a.members.length || b.rank - a.rank);
+  // Ranked by score, highest first (Steve, 2026-10-17). Prefer still shapes which teams get built.
+  const teams = [...seen.values()].sort((a, b) => b.score - a.score);
   return {teams: teams.slice(0, 1 + Math.max(0, root.team.alts)), pool};
 }
 VIEWS.teams = () => {
@@ -914,9 +917,14 @@ function drawTeamOut() {
   let body = "";
   DISTS.forEach((d, di) => {
     const ms = t.members.filter(m => m.di === di);
+    // Ace: the race's highest-scoring Must include runner, else its highest-scoring runner.
+    // Listed first. (The full two-build ace solve is still on OPEN-ITEMS.)
+    const pool2 = ms.some(m => pinned.has(m.c)) ? ms.filter(m => pinned.has(m.c)) : ms;
+    const ace = pool2.reduce((a, m) => !a || m.f.sc > a.f.sc ? m : a, null);
+    const order = ace ? [ace, ...ms.filter(m => m !== ace)] : ms;
     body += `<tr><td class="dh" colspan="7">${d.n}${d.n === "Dirt" ? " · Mile" : ""}<span class="muted" style="letter-spacing:0;text-transform:none;font-weight:400"> ${ms.length}/3</span></td></tr>`;
-    ms.forEach(m => {
-      body += `<tr><td>${STYLES[m.si].n}</td><td>${uName(m.u)}</td><td class="num">${uStar(m.u)}★</td>
+    order.forEach(m => {
+      body += `<tr><td>${STYLES[m.si].n}${m === ace ? ` <span class="ace">Ace</span>` : ""}</td><td>${uName(m.u)}</td><td class="num">${uStar(m.u)}★</td>
         <td class="apt">${m.f.g.map(gr).join("")}</td><td class="num">${m.f.sp ? "+" + m.f.sp : ""}</td>
         <td class="num gold">${f1(m.f.sc)}${pinned.has(m.c) ? " ⚑" : pool.prefs.has(m.u.id) ? " ♡" : ""}</td><td class="bench">${bench(di, m.si)}</td></tr>`;
     });

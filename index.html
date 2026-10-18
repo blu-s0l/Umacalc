@@ -829,10 +829,11 @@ function skillFit(u, di, si) {
   }
   return {pts, hit};
 }
-function teamPool() {
+// free: ignore Must include, Prefer and Exclude (the "Unrestricted" comparison team).
+function teamPool(free = false) {
   const pins = new Map();
-  root.team.pins.forEach(p => { const u = UBY[p.id]; if (u) pins.set(u.c, p); });
-  const excl = new Set(root.team.excl);
+  if (!free) root.team.pins.forEach(p => { const u = UBY[p.id]; if (u) pins.set(u.c, p); });
+  const excl = new Set(free ? [] : root.team.excl);
   const byChar = new Map();
   for (const u of ownedUmas()) {
     if (excl.has(u.id)) continue;
@@ -841,7 +842,7 @@ function teamPool() {
     if (!byChar.has(u.c)) byChar.set(u.c, []);
     byChar.get(u.c).push(u);
   }
-  return {byChar, pins, prefs: new Set(root.team.prefs)};
+  return {byChar, pins, prefs: new Set(free ? [] : root.team.prefs)};
 }
 const PIN_BONUS = 1000;
 // Weighted bipartite assignment as min-cost flow:
@@ -961,8 +962,19 @@ function buildTeams() {
   const lvl1 = expand(best, new Set()).sort((a, b) => b.rank - a.rank);
   lvl1.slice(0, 3).forEach(t => expand(t, t.ban));
   // Ranked by score, highest first (Steve, 2026-10-17). Prefer still shapes which teams get built.
-  const teams = [...seen.values()].sort((a, b) => b.score - a.score);
-  return {teams: teams.slice(0, 1 + Math.max(0, root.team.alts)), pool, aces};
+  const main = [...seen.values()].sort((a, b) => b.score - a.score).slice(0, 1 + Math.max(0, root.team.alts));
+  main.forEach(t => { t.pool = pool; t.aces = aces; });
+  // Two comparison teams, always added on top of the Alternatives count so the cost of each
+  // restriction is visible: the same team rules without the Ace locks, and no rules at all.
+  const extras = [], known = new Set(main.map(t => t.sig));
+  const extra = (p, tag) => {
+    const t = solveTeam(p, new Set());
+    if (known.has(t.sig)) return;
+    known.add(t.sig); t.pool = p; t.aces = new Map(); t.tag = tag; extras.push(t);
+  };
+  if (lock.size) extra(base, "No ace locks");
+  if (base.pins.size || base.prefs.size || root.team.excl.length) extra(teamPool(true), "Unrestricted");
+  return {teams: main.concat(extras).sort((a, b) => b.score - a.score), primary: main[0], pool, aces};
 }
 VIEWS.teams = () => {
   view.innerHTML = `<div class="card" id="teamCtl"></div><div id="teamOut"></div>`;
@@ -993,8 +1005,10 @@ function drawTeamCtl() {
 function drawTeamOut() {
   const R = UI.team;
   if (!R) { $("teamOut").innerHTML = ""; return; }
-  const {teams, pool, aces} = R;
+  // Each team carries the rules it was built under: comparison teams have their own pool and no aces.
+  const {teams, primary} = R;
   const t = teams[Math.min(UI.teamIdx, teams.length - 1)];
+  const pool = (t && t.pool) || R.pool, aces = (t && t.aces) || R.aces;
   if (!t || !t.members.length) { $("teamOut").innerHTML = `<div class="card muted">No eligible trainees.</div>`; return; }
   const inTeam = new Set(t.members.map(m => m.c));
   // Bench: the best unused trainees for each slot, so a swap is one glance away.
@@ -1022,7 +1036,7 @@ function drawTeamOut() {
         <td class="num gold">${f1(m.f.sc)}${pinned.has(m.c) ? " ⚑" : pool.prefs.has(m.u.id) ? " ♡" : ""}</td><td class="bench">${bench(di, m.si)}</td></tr>`;
     });
   });
-  const best = teams[0];
+  const best = primary || teams[0];   // Δ and "vs best" compare against your rules' best team
   const diff = (a, b) => {
     const A = new Map(a.members.map(m => [m.c, m])), B = new Map(b.members.map(m => [m.c, m]));
     const out = [...A.values()].filter(m => !B.has(m.c)).map(m => `<span class="neg">−${esc(m.u.n)}</span>`);
@@ -1031,15 +1045,15 @@ function drawTeamOut() {
     return out.concat(inn).join(" ") + (moved ? ` <span class="muted">· ${moved} moved</span>` : "");
   };
   const alts = teams.map((x, i) => `<tr${i === UI.teamIdx ? ' class="sorted"' : ""}><td class="num">${i + 1}</td><td class="num gold">${f1(x.score)}</td>
-    <td class="num">${i ? (x.score - best.score).toFixed(1) : ""}</td><td class="num">${x.members.length}</td><td class="num">${x.sparks}</td>
-    <td>${i ? diff(best, x) : '<span class="muted">best</span>'}</td>
+    <td class="num">${x !== best ? (x.score - best.score).toFixed(1) : ""}</td><td class="num">${x.members.length}</td><td class="num">${x.sparks}</td>
+    <td>${x === best ? '<span class="muted">best</span>' : (x.tag ? `<span class="pill info">${x.tag}</span> ` : "") + diff(best, x)}</td>
     <td><button class="small" data-act="tview" data-i="${i}"${i === UI.teamIdx ? " disabled" : ""}>View</button></td></tr>`).join("");
   // Ace-ticked pins that couldn't get a race of their own (two want the same race, more than
   // five ticked, or no race at Lowest aptitude).
   const placed = new Set(aces ? aces.values() : []);
-  const missed = root.team.pins.filter(p => p.ace && UBY[p.id] && !placed.has(UBY[p.id].c)).map(p => UBY[p.id].n);
+  const missed = t.tag ? [] : root.team.pins.filter(p => p.ace && UBY[p.id] && !placed.has(UBY[p.id].c)).map(p => UBY[p.id].n);
   $("teamOut").innerHTML = `<div class="calbox"><div class="calans">${f1(t.score)}</div>
-    <div class="calsub">Team <b>${UI.teamIdx + 1}</b> of ${teams.length}<span class="vbar">|</span><b>${t.members.length}</b>/15<span class="vbar">|</span>Sparks <b>${t.sparks}</b></div></div>
+    <div class="calsub">Team <b>${UI.teamIdx + 1}</b> of ${teams.length}<span class="vbar">|</span><b>${t.members.length}</b>/15<span class="vbar">|</span>Sparks <b>${t.sparks}</b>${t.tag ? `<span class="vbar">|</span>${t.tag}` : ""}</div></div>
     ${missed.length ? `<div class="banner amber">Not ace: ${missed.map(esc).join(", ")}</div>` : ""}
     <div class="card scroll"><table class="dist"><thead><tr><th>Style</th><th>Trainee</th><th class="num">Stars</th><th class="apt"><span>Sf</span><span>Ds</span><span>St</span></th><th class="num">Sparks</th><th class="num">Skills</th><th class="num">Score</th><th>Bench</th></tr></thead><tbody>${body}</tbody></table></div>
     <div class="card scroll"><div class="head">Ranked</div><table><thead><tr><th class="num">#</th><th class="num">Score</th><th class="num">Δ</th><th class="num">Size</th><th class="num">Sparks</th><th>vs best</th><th></th></tr></thead><tbody>${alts}</tbody></table></div>`;
@@ -1379,7 +1393,7 @@ function onClick(e) {
     case "pinx": root.team.pins.splice(i, 1); save(); drawTeamCtl(); break;
     case "exx": root.team.excl.splice(i, 1); save(); drawTeamCtl(); break;
     case "prx": root.team.prefs.splice(i, 1); save(); drawTeamCtl(); break;
-    case "build": UI.team = buildTeams(); UI.teamIdx = 0; drawTeamOut(); break;
+    case "build": UI.team = buildTeams(); UI.teamIdx = Math.max(0, UI.team.teams.indexOf(UI.team.primary)); drawTeamOut(); break;
     case "tview": UI.teamIdx = i; drawTeamOut(); break;
     case "hx": root.plan.skills.splice(i, 1); save(); drawHints(); break;
     case "hadd": {

@@ -39,6 +39,12 @@ Umamusume: Pretty Derby (Global). One `index.html` in the house style from
   - Each race's ace is its matched pin, else its best runner. Unticked pins are ordinary runners.
   - A ticked pin that couldn't get a race is listed in an amber "Not ace" line. That happens when
     two want the same race, more than five are ticked, or none of its races meets Lowest aptitude.
+  - **Comparison teams** (2026-10-18). Every build also solves "No ace locks" (same rules
+    without the Ace ticks; only when some are ticked) and "Unrestricted" (no Must include,
+    Prefer or Exclude; only when any are set). Both are added on top of the Alternatives count
+    and sorted into the ranked table by score, tagged with a blue pill. Δ and "vs best" compare
+    against your rules' best team, which is the one shown after a build. A comparison team that
+    duplicates one already in the list is skipped.
   - This replaced the global Settings checkbox "Force must include into ace role?". Pins saved
     before then take that checkbox's old value; it defaulted to on.
   - **Why two stages and not one flow:** pinned and unpinned runners merge at the shared style

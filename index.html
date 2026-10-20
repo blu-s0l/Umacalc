@@ -441,7 +441,7 @@ function save() {
   }
 }
 let root = load();
-const UI = {tq: "", tShow: [], tShowAll: false, tSort: ["name", 1],
+const UI = {tq: "", tShow: [], tShowAll: false, tSort: ["name", 1], ttSort: ["race", 1],
             tf: {surf: {on: [], g: "A", any: false, open: false},
                  dist: {on: [], g: "A", any: false, open: false},
                  sty:  {on: [], g: "A", any: false, open: false},
@@ -1479,10 +1479,22 @@ function drawTrials() {
   // the bottom but erratic can outrank a steady one.
   const order = rows.filter(r => r.s).sort((a, b) => a.risk - b.risk);
   const n = v => fN(v);
+  // Sortable: every column; lineup order until a header is clicked. Trend sorts by the fitted
+  // slope as % of the average per match. Rows with no matches yet always sit at the bottom.
+  rows.forEach((r, i) => {
+    r.i = i; r.rk = order.indexOf(r) + 1;
+    const xs = r.es.map(e => e.sc), k = xs.length, mx = (k - 1) / 2;
+    r.slope = k > 1 && r.s.m ? xs.reduce((a, y, x) => a + (x - mx) * (y - r.s.m), 0) / xs.reduce((a, _, x) => a + (x - mx) ** 2, 0) / r.s.m : 0;
+  });
+  const [sk, sd] = UI.ttSort;
+  const kv = {race: r => r.i, name: r => UBY[r.id].n + UBY[r.id].t, runs: r => r.s.n, avg: r => r.s.m, norm: r => r.s.m,
+              sd: r => r.s.sd, cv: r => r.s.cv, hi: r => r.s.hi, lo: r => r.s.lo, place: r => r.p ? r.p.m : Infinity, trend: r => r.slope, rank: r => r.rk}[sk];
+  const shown = rows.slice().sort((a, b) => (!a.s - !b.s) || (!a.s ? a.i - b.i : ((x, y) => x < y ? -1 : x > y ? 1 : 0)(kv(a), kv(b)) * sd));
+  const tth = (k, l, c = "") => `<th data-sort="${k}" data-tab="tt" class="${c}${sk === k && !(k === "race" && sd > 0) ? " sorted" : ""}">${l}${sk === k && !(k === "race" && sd > 0) ? (sd > 0 ? " ▴" : " ▾") : ""}</th>`;
   $("ttUmas").innerHTML = `<div class="head">Trainees<span class="vbar">|</span>Last ${N}</div>
-    <table><thead><tr><th>Race</th><th>Trainee</th><th class="num">Runs</th><th class="num">Avg</th><th class="num">Norm</th><th class="num">SD</th><th class="num">CV</th>
-      <th class="num">High</th><th class="num">Low</th><th class="num">Place</th><th>Trend</th><th class="num">Replace</th></tr></thead><tbody>
-    ${rows.map(r => { const rk = order.indexOf(r) + 1, nm = r.s && hi > lo ? (r.s.m - lo) / (hi - lo) * 100 : null;
+    <table><thead><tr>${tth("race", "Race")}${tth("name", "Trainee")}${tth("runs", "Runs", "num")}${tth("avg", "Avg", "num")}${tth("norm", "Norm", "num")}${tth("sd", "SD", "num")}${tth("cv", "CV", "num")}
+      ${tth("hi", "High", "num")}${tth("lo", "Low", "num")}${tth("place", "Place", "num")}${tth("trend", "Trend")}${tth("rank", "Replace", "num")}</tr></thead><tbody>
+    ${shown.map(r => { const rk = r.rk, nm = r.s && hi > lo ? (r.s.m - lo) / (hi - lo) * 100 : null;
       return `<tr><td>${DISTS[r.di].n}</td><td>${uName(UBY[r.id])}</td><td class="num">${r.s ? r.s.n : ""}</td>
         <td class="num gold">${r.s ? n(r.s.m) : ""}</td><td class="num">${nm == null ? "" : nm.toFixed(1) + "%"}</td>
         <td class="num">${r.s && r.s.n > 1 ? n(r.s.sd) : ""}</td><td class="num">${r.s && r.s.n > 1 ? (r.s.cv * 100).toFixed(0) + "%" : ""}</td>
@@ -1642,9 +1654,10 @@ function redraw() { show(); }
 function onClick(e) {
   const th = e.target.closest("th[data-sort]");
   if (th) {
-    const st = th.dataset.tab === "t" ? "tSort" : "sSort", k = th.dataset.sort;
-    UI[st] = UI[st][0] === k ? [k, -UI[st][1]] : [k, k === "name" || k === "type" ? 1 : -1];
-    th.dataset.tab === "t" ? drawTrainees() : drawSupports();
+    const st = {t: "tSort", s: "sSort", tt: "ttSort"}[th.dataset.tab], k = th.dataset.sort;
+    // First click: names, races, placings and replace rank ascend; figures descend.
+    UI[st] = UI[st][0] === k ? [k, -UI[st][1]] : [k, ["name", "type", "race", "place", "rank"].includes(k) ? 1 : -1];
+    ({t: drawTrainees, s: drawSupports, tt: drawTrials})[th.dataset.tab]();
     return;
   }
   const el = e.target.closest("[data-act]");

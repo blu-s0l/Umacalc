@@ -44,7 +44,7 @@ Umamusume: Pretty Derby (Global). One `index.html` in the house style from
   - **Each match records its own lineup,** so replacements come from the log and there is no
     manual Prior column.
   - **Lineup:** set by hand, or with Teams → "Use as Trials lineup" (ace first in each race).
-  - **Entry:** one form per match, a score and a placement for all 15. Enter moves to the next
+  - **Entry:** one form per match, a placement and a score for all 15. Tab and Enter run through all 15 placings, then all 15 scores (2026-10-20). Enter moves to the next
     box. Steve's call was always both; commas are allowed. Old matches can be edited, keeping
     that match's trainees, or deleted.
   - **Trainee stats:** over a trainee's last N matches in that race (N = Settings → Matches

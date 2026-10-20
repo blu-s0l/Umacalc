@@ -1549,8 +1549,8 @@ function drawTtEntry(msgText) {
   $("ttEntry").innerHTML = `<div class="head">${edit ? `Edit match ${UI.ttEdit + 1}` : "Add match"}</div>
     ${ready ? `<div class="ttgrid">${DISTS.map((d, di) => `<div><div class="lbl">${d.n}</div>
       ${src.map((e, j) => e.di === di ? `<div class="ttrow"><span class="nm" title="${esc(UBY[e.id].t)}">${esc(UBY[e.id].n)}</span>
-        <input class="mini" inputmode="numeric" placeholder="Score" data-tt="sc" data-j="${j}" value="${fmt(e.sc)}">
-        <input class="mini pl" inputmode="numeric" placeholder="#" data-tt="pl" data-j="${j}" value="${fmt(e.pl || "")}"></div>` : "").join("")}</div>`).join("")}</div>
+        <input class="mini pl" inputmode="numeric" placeholder="#" data-tt="pl" data-j="${j}" value="${fmt(e.pl || "")}">
+        <input class="mini" inputmode="numeric" placeholder="Score" data-tt="sc" data-j="${j}" value="${fmt(e.sc)}"></div>` : "").join("")}</div>`).join("")}</div>
       <div class="row" style="margin-top:10px"><button class="primary" data-act="ttsave">${edit ? "Save" : "Add"}</button>${edit ? `<button class="small" data-act="ttcancel">Cancel</button>` : ""}</div>`
       : `<div class="muted">Lineup incomplete</div>`}${msgText ? `<div class="err">${esc(msgText)}</div>` : ""}`;
 }
@@ -1830,13 +1830,20 @@ function onInput(e) {
 view.addEventListener("click", onClick);
 view.addEventListener("change", onChange);
 view.addEventListener("input", onInput);
-// Match entry: Enter moves to the next box, and on the last one saves the match.
+// Match entry order: all 15 placings first, then all 15 scores. The game shows the finishing
+// order before the scores, so that's the order they're typed in. Tab / Shift+Tab and Enter
+// follow it; Enter on the last score saves, Tab there moves on to the Add button.
 view.addEventListener("keydown", e => {
   const el = e.target;
-  if (e.key !== "Enter" || !el.dataset || !el.dataset.tt) return;
+  if ((e.key !== "Enter" && e.key !== "Tab") || !el.dataset || !el.dataset.tt) return;
+  const order = [...view.querySelectorAll('input[data-tt="pl"]'), ...view.querySelectorAll('input[data-tt="sc"]')];
+  const i = order.indexOf(el), back = e.key === "Tab" && e.shiftKey;
+  if (back ? i === 0 : i === order.length - 1) {
+    if (e.key === "Enter") { e.preventDefault(); ttSave(); }
+    return;                                      // Tab past either end leaves the form normally
+  }
   e.preventDefault();
-  const all = [...view.querySelectorAll("input[data-tt]")], i = all.indexOf(el);
-  if (i < all.length - 1) all[i + 1].focus(); else ttSave();
+  order[i + (back ? -1 : 1)].focus();
 });
 // <details> toggle doesn't bubble; catch it on the way down to remember which filter groups are open.
 view.addEventListener("toggle", e => { const k = e.target.dataset && e.target.dataset.k; if (k && UI.tf[k]) UI.tf[k].open = e.target.open; }, true);

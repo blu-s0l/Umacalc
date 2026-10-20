@@ -243,6 +243,7 @@ table.invt tr.hr td{padding:6px 0 0;border-bottom:2px solid var(--line2)}
 /* column-title bubbles: open below the title (the table's scroll box would clip one above);
    number columns anchor right so the bubble stays inside the table */
 th.hastip{position:relative}
+th .sort2{color:var(--mut);opacity:.7}
 th.hastip::after{content:attr(data-tip);position:absolute;top:calc(100% + 4px);left:0;z-index:60;width:230px;padding:8px 10px;
      background:var(--panel2);border:1px solid var(--line2);border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.45);
      color:var(--tx);font:400 12px/1.45 var(--sans);text-transform:none;letter-spacing:0;text-align:left;white-space:normal;
@@ -450,12 +451,12 @@ function save() {
   }
 }
 let root = load();
-const UI = {tq: "", tShow: [], tShowAll: false, tSort: ["name", 1], ttSort: ["race", 1],
+const UI = {tq: "", tShow: [], tShowAll: false, tSort: [["name", 1]], ttSort: [["race", 1]],
             tf: {surf: {on: [], g: "A", any: false, open: false},
                  dist: {on: [], g: "A", any: false, open: false},
                  sty:  {on: [], g: "A", any: false, open: false},
                  show: {open: false}},
-            sq: "", sType: "", sRar: "", sOwn: "all", sSort: ["score", -1],
+            sq: "", sType: "", sRar: "", sOwn: "all", sSort: [["score", -1]],
             team: null, teamIdx: 0, hq: ""};
 
 const avail = x => root.set.jp || (!!x.en && x.en <= TODAY);
@@ -576,6 +577,23 @@ function drawBanner() {
 }
 const view = $("view");
 
+/* ---------------- sorting with memory ---------------- */
+// Each sortable table keeps its last few sorts, newest first: the newest sets the order and the
+// earlier ones break its ties. So "vs Race" then "Race" groups by race with vs Race inside each.
+// Array.sort is stable, so whatever is still tied keeps the list's own order.
+const SORT_DEPTH = 3;
+function sortBy(list, keys, valueOf) {
+  const cmp = (x, y) => x < y ? -1 : x > y ? 1 : 0;
+  return list.sort((a, b) => { for (const [k, d] of keys) { const c = cmp(valueOf(a, k), valueOf(b, k)) * d; if (c) return c; } return 0; });
+}
+// Header cell: the main sort gets an arrow; the remembered ones a faint arrow. quiet hides the
+// arrow for a table's resting order (Trials in lineup order).
+function sortHead(keys, tab, k, label, cls = "", attrs = "", quiet = false) {
+  const pos = keys.findIndex(x => x[0] === k), d = pos >= 0 ? keys[pos][1] : 0, hush = quiet && pos === 0 && d > 0 && keys.length === 1;
+  const arrow = pos < 0 || hush ? "" : pos === 0 ? (d > 0 ? " ▴" : " ▾") : ` <span class="sort2">${d > 0 ? "▴" : "▾"}</span>`;
+  return `<th data-sort="${k}" data-tab="${tab}"${attrs} class="${cls}${pos === 0 && !hush ? " sorted" : ""}">${label}${arrow}</th>`;
+}
+
 /* ---------------- Trainees ---------------- */
 // Aptitude filter groups: indices into the aptitude string.
 // Surface has no All/Any switch: a trainee good on both turf and dirt is rare enough that
@@ -629,17 +647,10 @@ function drawTrainees() {
   let list = UMAS.filter(u => (avail(u) || jpOnly(u))
     && (!q || (u.n + " " + u.t).toLowerCase().includes(q))
     && show(u) && passes(u));
-  const [key, dir] = UI.tSort;
-  const kv = u => {
-    const st = uStats(u, uStar(u) || u.r);
-    if (key === "name") return u.n + u.t;
-    if (key === "star") return uStar(u);
-    return st[+key];
-  };
-  list.sort((a, b) => { const x = kv(a), y = kv(b); return (x < y ? -1 : x > y ? 1 : 0) * dir; });
+  sortBy(list, UI.tSort, (u, k) => k === "name" ? u.n + u.t : k === "star" ? uStar(u) : uStats(u, uStar(u) || u.r)[+k]);
   const nOwn = ownedUmas().length;
   $("tCount").textContent = `${list.length} shown · ${nOwn} owned · ${Object.keys(root.tgt).length} target`;
-  const th = (k, l, c = "") => `<th data-sort="${k}" data-tab="t" class="${c}${key === k ? " sorted" : ""}">${l}${key === k ? (dir > 0 ? " ▴" : " ▾") : ""}</th>`;
+  const th = (k, l, c = "") => sortHead(UI.tSort, "t", k, l, c);
   const rows = list.map(u => {
     const o = root.umas[u.id], star = o ? o.s : 0, st = uStats(u, star || u.r);
     const starOpts = [["0", "—"]];
@@ -717,12 +728,10 @@ function drawSupports() {
     && (!UI.sType || s.ty === UI.sType) && (!UI.sRar || s.r === +UI.sRar)
     && (UI.sOwn === "all" || (UI.sOwn === "own") === !!own(s)))
     .map(s => { const lv = curLv(s), e = supEff(s, lv); return {s, lv, o: e.o, cond: e.cond, sc: supScore(s, lv)}; });
-  const [key, dir] = UI.sSort;
-  const kv = r => key === "name" ? r.s.n + r.s.t : key === "score" ? r.sc : key === "lb" ? (own(r.s) ? own(r.s).lb : -1)
-    : key === "type" ? TYPES.findIndex(t => t[0] === r.s.ty) * 10 - r.s.r : key === "stat" ? statPlus(r.o) : (r.o[key] || 0);
-  list.sort((a, b) => { const x = kv(a), y = kv(b); return (x < y ? -1 : x > y ? 1 : 0) * dir; });
+  sortBy(list, UI.sSort, (r, k) => k === "name" ? r.s.n + r.s.t : k === "score" ? r.sc : k === "lb" ? (own(r.s) ? own(r.s).lb : -1)
+    : k === "type" ? TYPES.findIndex(t => t[0] === r.s.ty) * 10 - r.s.r : k === "stat" ? statPlus(r.o) : (r.o[k] || 0));
   $("sCount").textContent = `${list.length} shown · ${ownedSups().length} owned · unowned at LB4`;
-  const th = (k, l, c = "") => `<th data-sort="${k}" data-tab="s" class="${c}${key === k ? " sorted" : ""}">${l}${key === k ? (dir > 0 ? " ▴" : " ▾") : ""}</th>`;
+  const th = (k, l, c = "") => sortHead(UI.sSort, "s", k, l, c);
   const cell = (o, k) => `<td class="num">${o[k] || ""}</td>`;
   $("sTable").innerHTML = `<table><thead><tr>${th("type", "Type")}${th("name", "Card")}${th("lb", "LB")}<th class="num">Lv</th>
     ${th("score", "Score", "num")}${th("1", "Friend", "num")}${th("8", "Train", "num")}${th("2", "Mood", "num")}${th("15", "Race", "num")}${th("19", "Spec", "num")}${th("14", "Gauge", "num")}${th("stat", "Stat+", "num")}<th class="num">Hints</th></tr></thead><tbody>
@@ -1498,11 +1507,12 @@ function drawTrials() {
   // How far each average sits below the best in the lineup, and below the best of its own race.
   const raceTop = DISTS.map((d, di) => Math.max(...rows.filter(r => r.s && r.di === di).map(r => r.s.m)));
   rows.forEach(r => { if (r.s) { r.offAll = (r.s.m / hi - 1) * 100; r.offRace = (r.s.m / raceTop[r.di] - 1) * 100; } });
-  const [sk, sd] = UI.ttSort;
-  const kv = {race: r => r.i, name: r => UBY[r.id].n + UBY[r.id].t, runs: r => r.s.n, avg: r => r.s.m, norm: r => r.s.m,
+  // Race groups by race alone (lineup position is the final tiebreak), so a remembered sort orders
+  // the trainees within each race. Trainees with no matches yet always sit at the bottom.
+  const kv = {race: r => r.di, name: r => UBY[r.id].n + UBY[r.id].t, runs: r => r.s.n, avg: r => r.s.m, norm: r => r.s.m,
               top: r => r.offAll, rtop: r => r.offRace,
-              sd: r => r.s.sd, cv: r => r.s.cv, hi: r => r.s.hi, lo: r => r.s.lo, place: r => r.p ? r.p.m : Infinity, trend: r => r.slope, rank: r => r.rk}[sk];
-  const shown = rows.slice().sort((a, b) => (!a.s - !b.s) || (!a.s ? a.i - b.i : ((x, y) => x < y ? -1 : x > y ? 1 : 0)(kv(a), kv(b)) * sd));
+              sd: r => r.s.sd, cv: r => r.s.cv, hi: r => r.s.hi, lo: r => r.s.lo, place: r => r.p ? r.p.m : Infinity, trend: r => r.slope, rank: r => r.rk};
+  const shown = sortBy(rows.slice(), [["_none", 1], ...UI.ttSort], (r, k) => k === "_none" ? !r.s : r.s || k === "race" || k === "name" ? kv[k](r) : 0);
   // Column titles explain themselves in a bubble on hover.
   const TIP = {
     race: "The race this trainee runs. Sorting by it restores lineup order.",
@@ -1520,7 +1530,7 @@ function drawTrials() {
     trend: "Scores over those matches, oldest to newest. Sorts by the fitted slope, as % of the average per match.",
     rank: "Replace order: 1 is the first to swap out. Ranked by average − Consistency weight × SD.",
   };
-  const tth = (k, l, c = "") => `<th data-sort="${k}" data-tab="tt" data-tip="${esc(TIP[k])}" class="hastip ${c}${sk === k && !(k === "race" && sd > 0) ? " sorted" : ""}">${l}${sk === k && !(k === "race" && sd > 0) ? (sd > 0 ? " ▴" : " ▾") : ""}</th>`;
+  const tth = (k, l, c = "") => sortHead(UI.ttSort, "tt", k, l, "hastip " + c, ` data-tip="${esc(TIP[k])}"`, k === "race");
   const off = v => v == null ? "" : Math.abs(v) < .05 ? "—" : `<span class="neg">${v.toFixed(1)}%</span>`;
   $("ttUmas").innerHTML = `<div class="head">Trainees<span class="vbar">|</span>Last ${N}</div>
     <table><thead><tr>${tth("race", "Race")}${tth("name", "Trainee")}${tth("runs", "Runs", "num")}${tth("avg", "Avg", "num")}${tth("norm", "Norm", "num")}${tth("top", "vs Top", "num")}${tth("rtop", "vs Race", "num")}${tth("sd", "SD", "num")}${tth("cv", "CV", "num")}
@@ -1688,7 +1698,10 @@ function onClick(e) {
   if (th) {
     const st = {t: "tSort", s: "sSort", tt: "ttSort"}[th.dataset.tab], k = th.dataset.sort;
     // First click: names, races, placings and replace rank ascend; figures descend.
-    UI[st] = UI[st][0] === k ? [k, -UI[st][1]] : [k, ["name", "type", "race", "place", "rank"].includes(k) ? 1 : -1];
+    // Same column again flips it; a new column becomes the main sort and the old ones stay behind it.
+    const cur = UI[st];
+    UI[st] = cur[0][0] === k ? [[k, -cur[0][1]], ...cur.slice(1)]
+      : [[k, ["name", "type", "race", "place", "rank"].includes(k) ? 1 : -1], ...cur.filter(x => x[0] !== k)].slice(0, SORT_DEPTH);
     ({t: drawTrainees, s: drawSupports, tt: drawTrials})[th.dataset.tab]();
     return;
   }

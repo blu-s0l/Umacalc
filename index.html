@@ -239,6 +239,7 @@ table.invt tr.hr td{padding:6px 0 0;border-bottom:2px solid var(--line2)}
      color:var(--tx);font:400 12px/1.45 var(--sans);text-align:left;white-space:normal;
      opacity:0;pointer-events:none;transform:translateY(4px);transition:opacity .12s,transform .12s}
 .tip:hover::after,.tip:focus::after{opacity:1;transform:none}
+.wiperow{justify-content:flex-end;margin-top:4px}
 .sfields{grid-template-columns:repeat(auto-fill,minmax(130px,150px))}
 table.swt{width:auto}
 table.swt td input{width:72px;padding:4px 6px;font-family:var(--mono);text-align:right}
@@ -534,9 +535,25 @@ const VIEWS = {};
 let tab = "trainees";
 // Tabs that are scaffolding only: flagged so nobody plans around them yet.
 const WIP = new Set(["supports", "decks", "aces", "parents", "hints", "inventory"]);
+// What each tab owns, for its red "Delete … data" button: label, what the confirm lists, and the
+// wipe itself. Shared stores are split by owner: Planner keeps targets and its filter, Inventory
+// keeps item and shard counts (Planner's Owned column reads them), Hint Sources keeps its skill
+// list. Teams keeps its lists; Lowest aptitude and Alternatives belong to Settings.
+const WIPE = {
+  trainees:  ["Delete Trainees data", "owned trainees, their stars, potential and hint levels, and targets", r => { r.umas = {}; r.tgt = {}; }],
+  supports:  ["Delete Supports data", "owned support cards, limit breaks and levels", r => { r.sups = {}; }],
+  planner:   ["Delete Planner data", "star, potential, hint and card targets, and the trainee filter", r => { r.plan.umas = {}; r.plan.sups = {}; r.plan.show = {}; }],
+  inventory: ["Delete Inventory data", "item counts, shard counts and the trainee switches", r => { r.plan.inv = {}; r.inv = {on: {}, shards: {}}; }],
+  teams:     ["Delete Teams data", "the Must include, Prefer and Exclude lists", r => { r.team.pins = []; r.team.prefs = []; r.team.excl = []; }],
+  trials:    ["Delete Trials data", "the lineup, every recorded match and trained-copy numbers", r => { const s = r.tt.seeded; r.tt = ttNorm(null); r.tt.seeded = s; }],
+  decks:     ["Delete Decks data", "every deck", r => { r.decks = []; }],
+  hints:     ["Delete Hint Sources data", "the tracked skill list", r => { r.plan.skills = []; }],
+  settings:  ["Reset settings", "every team-building and Trials setting, back to its default", r => { r.cfg = cfgNorm(null); r.team.minG = "B"; r.team.alts = 8; }],
+};
 function show() {
   VIEWS[tab]();
   if (WIP.has(tab)) view.insertAdjacentHTML("afterbegin", `<div class="banner amber">Under construction · not for current use</div>`);
+  if (WIPE[tab]) view.insertAdjacentHTML("beforeend", `<div class="row wiperow"><button class="small danger" data-act="wipe" data-k="${tab}">${WIPE[tab][0]}</button></div>`);
 }
 function go() {
   const h = location.hash.slice(1);
@@ -1589,7 +1606,7 @@ VIEWS.settings = () => {
       <div><label>Matches averaged${tip(T.ttN)}</label>${num("ttN", c.ttN, "1")}</div>
       <div><label>Consistency weight${tip(T.ttRisk)}</label>${num("ttRisk", c.ttRisk)}</div>
     </div>
-    <div class="row" style="margin-top:14px"><button class="small" data-act="cfgreset">Defaults</button></div></div>`;
+    <div class="row" style="margin-top:14px"><button class="small danger" data-act="reset">Delete all data</button></div></div>`;
 };
 // A settings change makes any built team stale, so drop it; the next Build uses the new values.
 function setCfg(path, el) {
@@ -1612,7 +1629,7 @@ VIEWS.data = () => {
     <div class="card"><div class="head">Backup</div><div class="row">
       <button data-act="exp">Export</button>
       <button data-act="imp">Import</button><input type="file" id="impf" accept=".json,application/json" style="display:none">
-      <button class="danger" data-act="reset">Reset</button></div><div id="dmsg"></div></div>`;
+      <button class="danger" data-act="reset">Delete all data</button></div><div id="dmsg"></div></div>`;
 };
 
 /* ---------------- modal ---------------- */
@@ -1700,8 +1717,18 @@ function onClick(e) {
       setTimeout(() => URL.revokeObjectURL(link.href), 1000); break;
     }
     case "imp": $("impf").click(); break;
-    case "reset": if (confirm("Erase all trainees, cards, decks and plans?")) { root = blank(); save(); msg("Reset."); } break;
-    case "cfgreset": if (confirm("Reset team-building settings to their defaults?")) { root.cfg = cfgNorm(null); UI.team = null; save(); show(); } break;
+    case "reset":
+      if (confirm("Delete ALL Umacalc data: trainees, cards, plans, inventory, teams, Trials matches, decks and settings?\n\nThis can't be undone. Export a backup from Data first if you might want it back.")) {
+        root = blank(); UI.team = null; UI.ttEdit = null; save(); show(); msg("All data deleted.");
+      }
+      break;
+    case "wipe": {
+      const w = WIPE[el.dataset.k];
+      if (w && confirm(`${w[0]}?\n\nThis clears ${w[1]}. Other tabs are untouched.\n\nThis can't be undone.`)) {
+        w[2](root); UI.team = null; UI.ttEdit = null; save(); show();
+      }
+      break;
+    }
   }
 }
 function msg(t, bad) { const m = $("dmsg"); if (m) m.innerHTML = `<div class="${bad ? "err" : "okmsg"}">${esc(t)}</div>`; }

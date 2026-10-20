@@ -29,6 +29,16 @@ Umamusume: Pretty Derby (Global). One `index.html` in the house style from
 
 ## Decided
 
+- **Delete buttons** (2026-10-20). Each tab that stores data has a red "Delete … data" button at
+  the bottom right; the `WIPE` map in index.html says which slice each tab owns. Settings' button
+  is "Reset settings". Each asks for confirmation that names what goes. "Delete all data" is on
+  both Settings and Data, and its confirmation suggests exporting a backup first. Aces, Parents
+  and Data have no per-tab button: they store nothing of their own.
+  - Planner owns targets and its filter.
+  - Inventory owns item and shard counts.
+  - Hint Sources owns its skill list.
+  - Teams owns its three lists; Lowest aptitude and Alternatives belong to Settings.
+
 - **Trials tab: a Team Trials log** (2026-10-18), modelled on the "TT" tab of Steve's sheet.
   - **Stored:** `root.tt = {lineup: 5×3 card ids, rounds: [{t, e: [{id, di, sc, pl}] ×15}]}`.
   - **Each match records its own lineup,** so replacements come from the log and there is no

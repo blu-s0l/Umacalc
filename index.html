@@ -377,9 +377,10 @@ const STYLES = [{n: "Front", i: 6}, {n: "Pace", i: 7}, {n: "Late", i: 8}, {n: "E
 // - w: per-race stat weights [Spd, Sta, Pow, Gut, Wit] (see DISTS).
 // - ttN / ttRisk: Trials log window (last N matches) and how hard spread counts against a
 //   trainee when ranking who to replace (average − ttRisk × std dev).
+// - ttMA: matches in the trend chart's moving average.
 // - skN / skG: points per own skill tied to the slot's distance, style or surface (normal / gold or
 //   unique). A trainee with two Mile skills scores a few points more in Mile; about a B at most.
-const CFG_DEF = {g: {S: 1.03, A: 1, B: .93, C: .6, D: .3, E: .1, F: .05, G: .02}, fix: .85, pref: 8, grow: .6, base: .25, skN: 1.5, skG: 3, ttN: 15, ttRisk: .5,
+const CFG_DEF = {g: {S: 1.03, A: 1, B: .93, C: .6, D: .3, E: .1, F: .05, G: .02}, fix: .85, pref: 8, grow: .6, base: .25, skN: 1.5, skG: 3, ttN: 15, ttRisk: .5, ttMA: 8,
                  w: DISTS.map(d => d.w.slice())};
 const cfg = () => root.cfg;
 function cfgNorm(c) {
@@ -387,7 +388,7 @@ function cfgNorm(c) {
   if (!c || typeof c !== "object") return d;
   const num = (v, def) => typeof v === "number" && isFinite(v) && v >= 0 ? v : def;
   for (const g in d.g) d.g[g] = num(c.g && c.g[g], d.g[g]);
-  for (const k of ["fix", "pref", "grow", "base", "skN", "skG", "ttN", "ttRisk"]) d[k] = num(c[k], d[k]);
+  for (const k of ["fix", "pref", "grow", "base", "skN", "skG", "ttN", "ttRisk", "ttMA"]) d[k] = num(c[k], d[k]);
   d.w = d.w.map((row, di) => row.map((v, i) => num(c.w && c.w[di] && c.w[di][i], v)));
   return d;
 }
@@ -1504,10 +1505,11 @@ function slope(xs) {
   return k > 1 ? xs.reduce((a, y, x) => a + (x - mx) * (y - m), 0) / xs.reduce((a, _, x) => a + (x - mx) ** 2, 0) : 0;
 }
 // Full history of one trained copy in one race (k: "sc" score or "pl" placing), every match it ran,
-// with an 8-match moving average; before the 8th match it averages every match so far.
-const MA_N = 8;
+// with a moving average over Settings → Moving average matches (n); before the nth match it averages
+// every match so far.
+const maN = () => Math.max(1, Math.round(cfg().ttMA));
 function ttChart(id, di, k) {
-  const v = curV(id), pts = [];
+  const v = curV(id), pts = [], MA_N = maN();
   root.tt.rounds.forEach((r, mi) => r.e.forEach(e => { if (e.id === id && e.di === di && (e.v || 1) === v && e[k]) pts.push([mi + 1, e[k]]); }));
   const ma = pts.map((_, i) => { const w = pts.slice(Math.max(0, i - MA_N + 1), i + 1); return w.reduce((a, p) => a + p[1], 0) / w.length; });
   const pl = k === "pl", W = 700, H = 300, L = 62, Rm = 14, T = 12, B = 38;
@@ -1727,6 +1729,7 @@ VIEWS.settings = () => {
     w: "How much each stat counts in each race, for base stats and growth bonuses alike. Only the ratios within a row matter.",
     ttN: "How many recent matches every Trials figure uses: averages, spread, the replace ranking and replacement reviews.",
     ttRisk: "The replace order sorts by average − this × std dev. 0 ranks by average alone; higher values favour steadier trainees.",
+    ttMA: "Matches in the moving average on the trend charts. Until a trainee has that many, each point averages every match so far.",
   };
   view.innerHTML = `<div class="card"><div class="head">Team building</div>
     <div class="fields sfields">
@@ -1748,6 +1751,7 @@ VIEWS.settings = () => {
     <div class="fields sfields">
       <div><label>Matches averaged${tip(T.ttN)}</label>${num("ttN", c.ttN, "1")}</div>
       <div><label>Consistency weight${tip(T.ttRisk)}</label>${num("ttRisk", c.ttRisk)}</div>
+      <div><label>Moving average${tip(T.ttMA)}</label>${num("ttMA", c.ttMA, "1")}</div>
     </div>
     <div class="row" style="margin-top:14px"><button class="small danger" data-act="reset">Delete all data</button></div></div>`;
 };

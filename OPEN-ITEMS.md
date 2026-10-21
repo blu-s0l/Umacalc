@@ -81,8 +81,8 @@ Umamusume: Pretty Derby (Global). One `index.html` in the house style from
   - **Place trend and charts** (2026-10-21). A Place trend sparkline sits beside Place (1st at
     the top; sorts by places gained per match, improving first). Clicking either trend line opens
     a chart of that copy's full history in that race: every match as a point on Match × Score
-    (or Place) axes, with an 8-match moving average. Before the 8th match the average covers
-    every match so far. Score/Place buttons switch between the two.
+    (or Place) axes, with an n-match moving average (Settings → Moving average, default 8; 2026-10-21). Before
+    the nth match the average covers every match so far, whatever n is. Score/Place buttons switch between the two.
   - **Accept / Revert** (2026-10-21; Steve wanted a way to clear replacements). Accept closes a
     swap's test. Revert puts the outgoing copy back in the newcomer's slot (copy number too) after
     a confirmation; it's disabled once the newcomer has left the slot or the old trainee runs

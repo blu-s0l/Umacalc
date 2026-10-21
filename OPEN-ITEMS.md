@@ -40,7 +40,7 @@ Umamusume: Pretty Derby (Global). One `index.html` in the house style from
   - Teams owns its three lists; Lowest aptitude and Alternatives belong to Settings.
 
 - **Trials tab: a Team Trials log** (2026-10-18), modelled on the "TT" tab of Steve's sheet.
-  - **Stored:** `root.tt = {lineup: 5×3 card ids, rounds: [{t, e: [{id, di, sc, pl}] ×15}]}`.
+  - **Stored:** `root.tt = {lineup: 5×3 card ids, rounds: [{t, e: [{id, di, sc, pl, v}] ×15}], ver, done}`.
   - **Each match records its own lineup,** so replacements come from the log and there is no
     manual Prior column.
   - **Lineup:** set by hand, or with Teams → "Use as Trials lineup" (ace first in each race).
@@ -78,6 +78,18 @@ Umamusume: Pretty Derby (Global). One `index.html` in the house style from
     `e.v`. "+v" on a lineup slot starts the next copy, and "−v" takes it back until it has a
     match. A new copy is tested as "v1 → v2", like a swap. Trainee stats and the replace ranking
     use the current copy only.
+  - **Place trend and charts** (2026-10-21). A Place trend sparkline sits beside Place (1st at
+    the top; sorts by places gained per match, improving first). Clicking either trend line opens
+    a chart of that copy's full history in that race: every match as a point on Match × Score
+    (or Place) axes, with an 8-match moving average. Before the 8th match the average covers
+    every match so far. Score/Place buttons switch between the two.
+  - **Accept / Revert** (2026-10-21; Steve wanted a way to clear replacements). Accept closes a
+    swap's test. Revert puts the outgoing copy back in the newcomer's slot (copy number too) after
+    a confirmation; it's disabled once the newcomer has left the slot or the old trainee runs
+    elsewhere. Both store `root.tt.done[key] = "a" | "r"`, keyed by the swap match's time, race and
+    copies, and drop the row from the table. Swaps the log itself shows as reverted are settled
+    automatically. "Settled · N" shows them again, dimmed; Undo reopens a marked one until the log
+    shows the swap back.
 
 - **Aces** (built 2026-10-18, made per pin the same day). Each race has one ace, listed first with
   a gold "Ace" tag. Each Must include row has an **Ace** tick (`pin.ace`). The builder picks these

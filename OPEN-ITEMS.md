@@ -11,10 +11,6 @@ Umamusume: Pretty Derby (Global). One `index.html` in the house style from
   skill by link. Options to put to Steve: an in-app skill pop-up (description from `skills.json`,
   plus which trainees and cards give it), or another site that has per-skill pages.
   Steve chose to leave them unlinked for now (2026-10-17). Revisit only if he raises it.
-- **Ace bonus check.** Read GameTora's Team Trials scoring page
-  (`gametora.com/umamusume/team-trials-pvp-scoring`) to confirm how the ace bonus is scored. The
-  model gives the ace no point value; it only decides who is ace.
-
 - **Check the effect interpolation against the game.** `effAt()` interpolates linearly
   between GameTora's breakpoints (Lv 1, 5, 10 … 50) and floors. Effects with no value before
   their first breakpoint count as 0. One in-game check per rarity at LB1 or LB2 would settle it.
@@ -22,12 +18,25 @@ Umamusume: Pretty Derby (Global). One `index.html` in the house style from
   They get a flat `COND_UNIQUE` score credit and an asterisk.
 - Planner's Items table and the Inventory tab share `root.plan.inv`. Planner is target-based and
   Inventory is max-everything. If Planner ends up redundant, fold it into Inventory.
-- Team builder ideas: weighting a race by your own priorities (per-race weights are now in Settings, but there is no race-priority weight);
-  "has this trainee's unique skill reached Lv X" (star level).
 - Deck scoring ignores the deck's trainee: growth bonuses, distance and the scenario. A per-trainee
   weighting (e.g. Long trainee → stamina cards worth more) would be the next step.
 
 ## Decided
+
+- **No ace bonus in the team builder** (2026-10-22). GameTora: the ace (position 1) gets +10% on
+  all the points she earns, additive with the other modifiers. Steve's call: the builder doesn't
+  score the ace role, because whoever is ace earns that bonus anyway; it just makes the trainee
+  with the most winning potential (stats, aptitudes, skills) the ace. Trials lets the ace be
+  changed by hand when another runner outperforms.
+- **Unique skill star level in the team builder** (2026-10-22). GameTora's Team Trials scoring:
+  a unique activation is worth 1,500 (Lv1) / 1,700 (Lv2) then +100 per level for 1–2★, and +500
+  more at every level from 3★ (the upgraded unique). Fan guides: star rank sets the starting
+  level (1★ Lv1, 2★ Lv2, 3★ Lv1, 4★ Lv2, 5★ Lv3) and three career fan milestones add up to three
+  levels, assumed reached. So per activation 1★ 1,900, 2★ 2,000, 3★ 2,400, 4★ 2,500, 5★ 2,600
+  (`UNIQ_PTS`). Slot score adds `skU` × (that − 1,900) / 100 wherever the unique can fire (works
+  anywhere, or its tags match the slot). Settings → Unique star level, default 1: 5★ +7, 4★ +6,
+  3★ +5, 2★ +1. The starting levels come from fan guides, not GameTora; check one in game if a
+  number looks off.
 
 - **Delete buttons** (2026-10-20). Each tab that stores data has a red "Delete … data" button at
   the bottom right; the `WIPE` map in index.html says which slice each tab owns. Settings' button
@@ -201,5 +210,7 @@ Umamusume: Pretty Derby (Global). One `index.html` in the house style from
 
 ## Ruled out
 
+- Race-priority weighting in the team builder (2026-10-22): every race counts toward the same
+  Team Trials total, so none is worth more than another.
 - Monies (coin) costs for potential and hint levels: Steve chose to leave them out (2026-10-17).
 - Hotlinking images from GameTora: it uses their bandwidth and makes the app depend on their paths.

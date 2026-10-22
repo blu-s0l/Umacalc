@@ -396,7 +396,9 @@ const STYLES = [{n: "Front", i: 6}, {n: "Pace", i: 7}, {n: "Late", i: 8}, {n: "E
 // - ttMA: matches in the trend chart's moving average.
 // - skN / skG: points per own skill tied to the slot's distance, style or surface (normal / gold or
 //   unique). A trainee with two Mile skills scores a few points more in Mile; about a B at most.
-const CFG_DEF = {g: {S: 1.03, A: 1, B: .93, C: .6, D: .3, E: .1, F: .05, G: .02}, fix: .85, pref: 8, grow: .6, base: .25, skN: 1.5, skG: 3, ttN: 15, ttRisk: .5, ttMA: 8,
+// - skU: points per 100 Team Trials points a unique activation is worth above a 1★'s (UNIQ_PTS),
+//   counted wherever the unique can fire. Default 1: a 5★ gets +7, a 3★ +5 over a 1★.
+const CFG_DEF = {g: {S: 1.03, A: 1, B: .93, C: .6, D: .3, E: .1, F: .05, G: .02}, fix: .85, pref: 8, grow: .6, base: .25, skN: 1.5, skG: 3, ttN: 15, ttRisk: .5, ttMA: 8, skU: 1,
                  w: DISTS.map(d => d.w.slice())};
 const cfg = () => root.cfg;
 function cfgNorm(c) {
@@ -404,7 +406,7 @@ function cfgNorm(c) {
   if (!c || typeof c !== "object") return d;
   const num = (v, def) => typeof v === "number" && isFinite(v) && v >= 0 ? v : def;
   for (const g in d.g) d.g[g] = num(c.g && c.g[g], d.g[g]);
-  for (const k of ["fix", "pref", "grow", "base", "skN", "skG", "ttN", "ttRisk", "ttMA"]) d[k] = num(c[k], d[k]);
+  for (const k of ["fix", "pref", "grow", "base", "skN", "skG", "ttN", "ttRisk", "ttMA", "skU"]) d[k] = num(c[k], d[k]);
   d.w = d.w.map((row, di) => row.map((v, i) => num(c.w && c.w[di] && c.w[di][i], v)));
   return d;
 }
@@ -902,8 +904,20 @@ function slotFit(u, star, di, si, minG) {
   const stat = st.reduce((a, v, i) => a + v * w[i], 0) / ws;          // base stats at owned stars
   const grow = u.g.reduce((a, v, i) => a + v * w[i], 0) / ws;         // growth bonus %
   const sk = skillFit(u, di, si);
-  const sc = 100 * m + (stat - 85) * c.base + grow * c.grow + sk.pts;
+  // Star level: a higher-star unique earns more Team Trials points each time it fires.
+  const uq = sk.uniq ? c.skU * ((UNIQ_PTS[star] || UNIQ_PTS[1]) - UNIQ_PTS[1]) / 100 : 0;
+  const sc = 100 * m + (stat - 85) * c.base + grow * c.grow + sk.pts + uq;
   return {sc, g, sp, sk: sk.hit};
+}
+// Team Trials points per unique-skill activation, by star level (GameTora's scoring table). Star
+// rank sets the starting level (1★ Lv1, 2★ Lv2, 3★ Lv1, 4★ Lv2, 5★ Lv3) and the three career fan
+// milestones add up to three more, assumed reached; 3★ and up use the upgraded unique, +500.
+const UNIQ_PTS = [0, 1900, 2000, 2400, 2500, 2600];
+// A skill's tags against a slot: null when it works anywhere, else whether the slot has them all.
+function skTagFit(s, dist, style, ground) {
+  const [, , ds = [], ss = [], gs = []] = s;
+  if (!ds.length && !ss.length && !gs.length) return null;
+  return !((ds.length && !ds.includes(dist)) || (ss.length && !ss.includes(style)) || (gs.length && !gs.includes(ground)));
 }
 // Skills that favour a slot: the trainee's unique and innate skills plus the potential skills its
 // potential level has unlocked. A skill counts only when it names a distance, style or surface
@@ -916,13 +930,13 @@ function skillFit(u, di, si) {
   for (const id of [u.u, ...u.in, ...u.aw.filter((_, k) => pot >= k + 2)]) {
     const s = id && D.skills[id];
     if (!s) continue;
-    const [, rar, ds = [], ss = [], gs = []] = s;
-    if (!ds.length && !ss.length && !gs.length) continue;
-    if ((ds.length && !ds.includes(dist)) || (ss.length && !ss.includes(style)) || (gs.length && !gs.includes(ground))) continue;
-    pts += rar >= 2 ? c.skG : c.skN;
+    if (!skTagFit(s, dist, style, ground)) continue;
+    pts += s[1] >= 2 ? c.skG : c.skN;
     hit.push(id);
   }
-  return {pts, hit};
+  // uniq: the unique can fire in this slot (it works anywhere or its tags match).
+  const us = u.u && D.skills[u.u];
+  return {pts, hit, uniq: !!us && skTagFit(us, dist, style, ground) !== false};
 }
 // free: ignore Must include, Prefer and Exclude (the "Unrestricted" comparison team).
 function teamPool(free = false) {
@@ -1774,6 +1788,7 @@ VIEWS.settings = () => {
     base: "Points per base-stat point above 85 at your star level, weighted by the race's stats. A light tiebreak.",
     skN: "Points for each of the trainee's own normal skills tied to the slot's distance, style or surface.",
     skG: "Points for each of the trainee's own gold or unique skills tied to the slot's distance, style or surface.",
+    skU: "Points per 100 Team Trials points a unique skill activation earns above a 1★'s, wherever the unique can fire. Per activation: 1★ 1,900, 2★ 2,000, 3★ 2,400, 4★ 2,500, 5★ 2,600 (all career level-ups assumed). At 1, a 5★ gets +7 and a 3★ +5.",
     grade: "Multiplier on a slot's score for each of its three aptitudes: surface, distance and style. A is 1; anything below A costs points.",
     w: "How much each stat counts in each race, for base stats and growth bonuses alike. Only the ratios within a row matter.",
     ttN: "How many recent matches every Trials figure uses: averages, spread, the replace ranking and replacement reviews.",
@@ -1790,6 +1805,7 @@ VIEWS.settings = () => {
       <div><label>Base stat weight${tip(T.base)}</label>${num("base", c.base)}</div>
       <div><label>Skill match${tip(T.skN)}</label>${num("skN", c.skN)}</div>
       <div><label>Gold skill match${tip(T.skG)}</label>${num("skG", c.skG)}</div>
+      <div><label>Unique star level${tip(T.skU)}</label>${num("skU", c.skU)}</div>
     </div>
     <div class="head" style="margin-top:16px">Aptitude grade ×${tip(T.grade)}</div>
     <div class="fields sfields">${[..."SABCDEFG"].map(g => `<div><label>${g}</label>${num("g." + g, c.g[g])}</div>`).join("")}</div>

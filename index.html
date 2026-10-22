@@ -281,6 +281,15 @@ button.small.on{color:var(--blue);background:var(--bluebg);border-color:rgba(77,
 .chart .aceband{fill:var(--gold);opacity:.09}
 .chart .acech{stroke:var(--gold);stroke-dasharray:3 3;opacity:.6}
 button.acet{width:20px;height:20px;padding:0;border-radius:50%;font-size:10px;font-weight:700;color:var(--mut);flex:none}
+/* lineup ace buttons: hover bubble below, anchored right so the Dirt column's stays on screen */
+button.acet[data-tip]{position:relative}
+button.acet[data-tip]::after{content:attr(data-tip);position:absolute;top:calc(100% + 6px);right:-6px;z-index:60;width:240px;padding:8px 10px;
+     background:var(--panel2);border:1px solid var(--line2);border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.45);
+     color:var(--tx);font:400 12px/1.45 var(--sans);letter-spacing:0;text-align:left;white-space:normal;
+     opacity:0;pointer-events:none;transform:translateY(-4px);transition:opacity .12s .25s,transform .12s .25s}
+button.acet[data-tip]:hover::after{opacity:1;transform:none}
+.ttline>div:first-child button.acet::after{right:auto;left:-6px}
+@media(max-width:900px){.ttline>div:nth-child(odd) button.acet::after{right:auto;left:-6px}}
 .ttrow button.acet{width:18px;height:18px;font-size:9.5px}
 button.acet.on{color:var(--gold);border-color:rgba(176,141,63,.7);background:rgba(176,141,63,.12)}
 .legend .line{width:16px;height:2px;background:var(--sub);margin-left:10px}
@@ -1450,6 +1459,9 @@ const ttOf = (rs, id, di, v) => rs.flatMap(r => r.e.filter(e => e.id === id && e
 const aceOf = (r, di) => (r.e.find(e => e.di === di && e.a) || {}).id;
 // Which results count under the Trials role filter: every run, ace runs only, or the rest.
 const roleOk = role => e => role === "ace" ? !!e.a : role === "non" ? !e.a : true;
+// Hover text for the lineup's ace buttons.
+const ACE_TIP_ON = "This runner is the race's ace. Click A on another runner to swap them: that runner moves into this first slot and this one takes their old slot.";
+const ACE_TIP_OFF = "Make ace: swaps this runner with the current ace, so the two trade slots. Only the order changes: no replacement is logged, and copy numbers and stats stay with each trainee.";
 const ROLES = [["all", "All"], ["ace", "Ace"], ["non", "Not ace"]];
 const raceTotal = (r, di) => r.e.filter(e => e.di === di).reduce((a, e) => a + e.sc, 0);
 const teamTotal = r => r.e.reduce((a, e) => a + e.sc, 0);
@@ -1594,7 +1606,7 @@ function drawTrials() {
       const fresh = id && v > 1 && !ttOf(R, id, di, v).length;
       return `<div class="ttslot"><select class="mini" data-act="ttl" data-di="${di}" data-k="${k}">${opts(uo, id || "")}</select>
         ${id ? `<span class="mono muted">v${v}</span><button class="x" data-act="ttver" data-id="${id}" data-d="${fresh ? -1 : 1}" title="${fresh ? "Undo new copy" : "New trained copy"}">${fresh ? "−v" : "+v"}</button>
-          <button class="acet${k === 0 ? " on" : ""}" data-act="ttmkace" data-di="${di}" data-k="${k}" title="${k === 0 ? "Ace" : "Make ace"}">A</button>` : ""}</div>`; }).join("")}</div>`).join("")}</div>
+          <button class="acet${k === 0 ? " on" : ""}" data-act="ttmkace" data-di="${di}" data-k="${k}" aria-label="${k === 0 ? "Ace" : "Make ace"}" data-tip="${k === 0 ? ACE_TIP_ON : ACE_TIP_OFF}">A</button>` : ""}</div>`; }).join("")}</div>`).join("")}</div>
     ${dup ? `<div class="banner amber" style="margin-top:10px">A trainee appears twice</div>` : ""}`;
   drawTtEntry();
   // Trainees in the current lineup, over the last N matches each ran in that race.
@@ -1729,7 +1741,7 @@ function drawTtEntry(msgText) {
   const fmt = v => v === "" || v == null ? "" : String(v);
   $("ttEntry").innerHTML = `<div class="head">${edit ? `Edit match ${UI.ttEdit + 1}` : "Add match"}</div>
     ${ready ? `<div class="ttgrid">${DISTS.map((d, di) => `<div><div class="lbl">${d.n}</div>
-      ${src.map((e, j) => e.di === di ? `<div class="ttrow"><button class="acet${e.a ? " on" : ""}" tabindex="-1" data-act="ttace" data-di="${di}" data-j="${j}" title="Ace">A</button><span class="nm" title="${esc(UBY[e.id].n + " · " + UBY[e.id].t)}">${esc(UBY[e.id].n)}</span>
+      ${src.map((e, j) => e.di === di ? `<div class="ttrow"><button class="acet${e.a ? " on" : ""}" tabindex="-1" data-act="ttace" data-di="${di}" data-j="${j}" title="Ace for this match only. Defaults to the lineup's ace; click another runner to record them instead, without changing the lineup.">A</button><span class="nm" title="${esc(UBY[e.id].n + " · " + UBY[e.id].t)}">${esc(UBY[e.id].n)}</span>
         <input class="mini pl" inputmode="numeric" placeholder="#" data-tt="pl" data-j="${j}" value="${fmt(e.pl || "")}">
         <input class="mini" inputmode="numeric" placeholder="Score" data-tt="sc" data-j="${j}" value="${fmt(e.sc)}"></div>` : "").join("")}</div>`).join("")}</div>
       <div class="row" style="margin-top:10px"><button class="primary" data-act="ttsave">${edit ? "Save" : "Add"}</button>${edit ? `<button class="small" data-act="ttcancel">Cancel</button>` : ""}</div>`

@@ -86,7 +86,8 @@ Umamusume: Pretty Derby (Global). One `index.html` in the house style from
     the nth match the average covers every match so far, whatever n is. Score/Place buttons switch between the two.
   - **Ace tracking** (2026-10-22). Each entry stores `e.a` (1 = that race's ace). Older matches
     were saved in lineup order, ace first, so the first runner of each race is migrated as ace.
-    The lineup's first slot is the ace; "A" on another slot swaps it into first. The match form
+    The lineup's first slot is the ace; "A" on another slot swaps it into first. Each lineup "A" has a
+    hover bubble explaining the swap (2026-10-22); the form's toggle has a plain title. The match form
     has an "A" toggle per runner, defaulting to the lineup's ace (or the saved one when editing),
     so a match can record a different ace. Ace changes are not replacements and open no test.
     The Trainees table marks the current ace and has All / Ace / Not ace buttons that limit every

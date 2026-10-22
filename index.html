@@ -1499,6 +1499,13 @@ function spark(xs, inv) {
   const y = v => hi === lo ? h / 2 : inv ? 2 + (v - lo) / (hi - lo) * (h - 4) : h - 2 - (v - lo) / (hi - lo) * (h - 4);
   return `<svg class="spark" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}"><polyline fill="none" stroke="var(--gold)" stroke-width="1.5" points="${xs.map((v, i) => `${(i * sx).toFixed(1)},${y(v).toFixed(1)}`).join(" ")}"/></svg>`;
 }
+// Most frequent value(s), ascending, ties included; none when nothing repeats (every value would tie).
+function modes(xs) {
+  const c = {}; xs.forEach(x => { c[x] = (c[x] || 0) + 1; });
+  const top = Math.max(0, ...Object.values(c));
+  return top > 1 || xs.length === 1 ? Object.keys(c).filter(k => c[k] === top).map(Number).sort((a, b) => a - b) : [];
+}
+const fModes = xs => xs.join("/");
 // Least-squares slope of a series against its position, per step.
 function slope(xs) {
   const k = xs.length, mx = (k - 1) / 2, m = xs.reduce((a, b) => a + b, 0) / k;
@@ -1582,7 +1589,7 @@ function drawTrials() {
   // Rows with no matches yet always sit at the bottom.
   rows.forEach((r, i) => {
     r.i = i; r.rk = order.indexOf(r) + 1;
-    r.pls = r.es.filter(e => e.pl).map(e => e.pl);
+    r.pls = r.es.filter(e => e.pl).map(e => e.pl); r.pmo = modes(r.pls);
     r.slope = r.s && r.s.m ? slope(r.es.map(e => e.sc)) / r.s.m : 0;
     r.pslope = -slope(r.pls);
   });
@@ -1593,7 +1600,7 @@ function drawTrials() {
   // the trainees within each race. Trainees with no matches yet always sit at the bottom.
   const kv = {race: r => r.di, name: r => UBY[r.id].n + UBY[r.id].t, runs: r => r.s.n, avg: r => r.s.m, norm: r => r.s.m,
               top: r => r.offAll, rtop: r => r.offRace,
-              sd: r => r.s.sd, cv: r => r.s.cv, hi: r => r.s.hi, lo: r => r.s.lo, place: r => r.p ? r.p.m : Infinity, trend: r => r.slope, ptrend: r => r.pslope, rank: r => r.rk};
+              sd: r => r.s.sd, cv: r => r.s.cv, hi: r => r.s.hi, lo: r => r.s.lo, place: r => r.p ? r.p.m : Infinity, pmode: r => r.pmo.length ? r.pmo[0] : Infinity, trend: r => r.slope, ptrend: r => r.pslope, rank: r => r.rk};
   const shown = sortBy(rows.slice(), [["_none", 1], ...UI.ttSort], (r, k) => k === "_none" ? !r.s : r.s || k === "race" || k === "name" ? kv[k](r) : 0);
   // Column titles explain themselves in a bubble on hover.
   const TIP = {
@@ -1609,6 +1616,7 @@ function drawTrials() {
     hi: "Best single score over those matches.",
     lo: "Worst single score over those matches.",
     place: "Average finishing place (1 = first).",
+    pmode: "Most common finishing place. Ties show every tied place; blank when no place repeats.",
     trend: "Scores over those matches, oldest to newest. Sorts by the fitted slope, as % of the average per match. Click a line for the full chart.",
     ptrend: "Placings over those matches, oldest to newest, 1st at the top. Sorts by places gained per match, from the fitted slope. Click a line for the full chart.",
     rank: "Replace order: 1 is the first to swap out. Ranked by average − Consistency weight × SD.",
@@ -1618,25 +1626,25 @@ function drawTrials() {
   const sparkBtn = (r, k, svg) => svg && `<button class="sparkb" data-act="ttchart" data-id="${r.id}" data-di="${r.di}" data-k="${k}">${svg}</button>`;
   $("ttUmas").innerHTML = `<div class="head">Trainees<span class="vbar">|</span>Last ${N}</div>
     <table><thead><tr>${tth("race", "Race")}${tth("name", "Trainee")}${tth("runs", "Runs", "num")}${tth("avg", "Avg", "num")}${tth("norm", "Norm", "num")}${tth("top", "vs Top", "num")}${tth("rtop", "vs Race", "num")}${tth("sd", "SD", "num")}${tth("cv", "CV", "num")}
-      ${tth("hi", "High", "num")}${tth("lo", "Low", "num")}${tth("trend", "Trend")}${tth("place", "Place", "num")}${tth("ptrend", "Place trend")}${tth("rank", "Replace", "num")}</tr></thead><tbody>
+      ${tth("hi", "High", "num")}${tth("lo", "Low", "num")}${tth("trend", "Trend")}${tth("place", "Place", "num")}${tth("pmode", "Mode", "num")}${tth("ptrend", "Place trend")}${tth("rank", "Replace", "num")}</tr></thead><tbody>
     ${shown.map(r => { const rk = r.rk, nm = r.s && hi > lo ? (r.s.m - lo) / (hi - lo) * 100 : null;
       return `<tr><td>${DISTS[r.di].n}</td><td>${uName(UBY[r.id])}</td><td class="num">${r.s ? r.s.n : ""}</td>
         <td class="num gold">${r.s ? n(r.s.m) : ""}</td><td class="num">${nm == null ? "" : nm.toFixed(1) + "%"}</td>
         <td class="num">${off(r.offAll)}</td><td class="num">${off(r.offRace)}</td>
         <td class="num">${r.s && r.s.n > 1 ? n(r.s.sd) : ""}</td><td class="num">${r.s && r.s.n > 1 ? (r.s.cv * 100).toFixed(0) + "%" : ""}</td>
         <td class="num">${r.s ? n(r.s.hi) : ""}</td><td class="num">${r.s ? n(r.s.lo) : ""}</td>
-        <td>${sparkBtn(r, "sc", spark(r.es.map(e => e.sc)))}</td><td class="num">${r.p ? r.p.m.toFixed(2) : ""}</td>
-        <td>${sparkBtn(r, "pl", spark(r.pls, true))}</td><td class="num${rk === 1 ? " gold" : ""}">${rk || ""}</td></tr>`; }).join("") || `<tr><td colspan="15" class="muted">—</td></tr>`}</tbody></table>`;
+        <td>${sparkBtn(r, "sc", spark(r.es.map(e => e.sc)))}</td><td class="num">${r.p ? r.p.m.toFixed(2) : ""}</td><td class="num">${fModes(r.pmo)}</td>
+        <td>${sparkBtn(r, "pl", spark(r.pls, true))}</td><td class="num${rk === 1 ? " gold" : ""}">${rk || ""}</td></tr>`; }).join("") || `<tr><td colspan="16" class="muted">—</td></tr>`}</tbody></table>`;
   // Races and team, per match, over the last N matches.
   const last = R.slice(-N);
   const rs = DISTS.map((d, di) => ({d, s: stat(last.filter(r => r.e.some(e => e.di === di)).map(r => raceTotal(r, di))),
-    p: stat(last.flatMap(r => r.e.filter(e => e.di === di && e.pl).map(e => e.pl)))}));
+    pl: last.flatMap(r => r.e.filter(e => e.di === di && e.pl).map(e => e.pl))})).map(x => ({...x, p: stat(x.pl), pmo: modes(x.pl)}));
   const rm = rs.filter(x => x.s).map(x => x.s.m), rlo = Math.min(...rm), rhi = Math.max(...rm), ts = stat(last.map(teamTotal));
   $("ttRaces").innerHTML = `<div class="head">Races<span class="vbar">|</span>Last ${N}</div>
-    <table><thead><tr><th>Race</th><th class="num">Avg</th><th class="num">Norm</th><th class="num">SD</th><th class="num">High</th><th class="num">Low</th><th class="num">Place</th></tr></thead><tbody>
+    <table><thead><tr><th>Race</th><th class="num">Avg</th><th class="num">Norm</th><th class="num">SD</th><th class="num">High</th><th class="num">Low</th><th class="num">Place</th><th class="num">Mode</th></tr></thead><tbody>
     ${rs.map(x => `<tr><td>${x.d.n}</td><td class="num gold">${x.s ? n(x.s.m) : ""}</td><td class="num">${x.s && rhi > rlo ? ((x.s.m - rlo) / (rhi - rlo) * 100).toFixed(1) + "%" : ""}</td>
-      <td class="num">${x.s && x.s.n > 1 ? n(x.s.sd) : ""}</td><td class="num">${x.s ? n(x.s.hi) : ""}</td><td class="num">${x.s ? n(x.s.lo) : ""}</td><td class="num">${x.p ? x.p.m.toFixed(2) : ""}</td></tr>`).join("")}
-    ${ts ? `<tr class="tot"><td>Team</td><td class="num gold">${n(ts.m)}</td><td></td><td class="num">${ts.n > 1 ? n(ts.sd) : ""}</td><td class="num">${n(ts.hi)}</td><td class="num">${n(ts.lo)}</td><td></td></tr>` : ""}</tbody></table>`;
+      <td class="num">${x.s && x.s.n > 1 ? n(x.s.sd) : ""}</td><td class="num">${x.s ? n(x.s.hi) : ""}</td><td class="num">${x.s ? n(x.s.lo) : ""}</td><td class="num">${x.p ? x.p.m.toFixed(2) : ""}</td><td class="num">${fModes(x.pmo)}</td></tr>`).join("")}
+    ${ts ? `<tr class="tot"><td>Team</td><td class="num gold">${n(ts.m)}</td><td></td><td class="num">${ts.n > 1 ? n(ts.sd) : ""}</td><td class="num">${n(ts.hi)}</td><td class="num">${n(ts.lo)}</td><td></td><td></td></tr>` : ""}</tbody></table>`;
   // Replacements: the replaced trainee's last N matches in that race against the newcomer's
   // matches since, and the same windows for the race total and the whole team (placement bonuses
   // mean a swap can lift or sink teammates too).
@@ -1794,7 +1802,7 @@ function onClick(e) {
     // Same column again flips it; a new column becomes the main sort and the old ones stay behind it.
     const cur = UI[st];
     UI[st] = cur[0][0] === k ? [[k, -cur[0][1]], ...cur.slice(1)]
-      : [[k, ["name", "type", "race", "place", "rank"].includes(k) ? 1 : -1], ...cur.filter(x => x[0] !== k)].slice(0, SORT_DEPTH);
+      : [[k, ["name", "type", "race", "place", "pmode", "rank"].includes(k) ? 1 : -1], ...cur.filter(x => x[0] !== k)].slice(0, SORT_DEPTH);
     ({t: drawTrainees, s: drawSupports, tt: drawTrials})[th.dataset.tab]();
     return;
   }

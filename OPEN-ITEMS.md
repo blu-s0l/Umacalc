@@ -49,7 +49,8 @@ Umamusume: Pretty Derby (Global). One `index.html` in the house style from
     that match's trainees, or deleted.
   - **Trainee stats:** over a trainee's last N matches in that race (N = Settings → Matches
     averaged, default 15 like the sheet). Shows average, normalized (min to max across the 15),
-    sample SD, CV, high, low, placement and a trend line.
+    sample SD, CV, high, low, placement (average and mode) and a trend line. Mode (2026-10-21)
+    shows every tied place as "3/4" and stays blank when no place repeats; the Races table has it too.
   - **Replace ranking:** ascending by average − λ·SD, with λ = Settings → Consistency weight,
     default 0.5. A steady low scorer goes first; when averages are close, the erratic one does.
   - **Races table:** race totals per match, plus the team total.

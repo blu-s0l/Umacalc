@@ -276,6 +276,13 @@ button.small.on{color:var(--blue);background:var(--bluebg);border-color:rgba(77,
 .legend{margin-left:auto;font-size:12px;color:var(--sub);display:flex;align-items:center;gap:6px}
 .legend i{display:inline-block}
 .legend .dot{width:8px;height:8px;border-radius:50%;background:var(--gold)}
+.legend .dot.na{background:none;border:1.5px solid var(--gold);width:5px;height:5px;margin-left:10px}
+.chart .pt.na{fill:var(--panel);stroke:var(--gold);stroke-width:1.5}
+.chart .aceband{fill:var(--gold);opacity:.09}
+.chart .acech{stroke:var(--gold);stroke-dasharray:3 3;opacity:.6}
+button.acet{width:20px;height:20px;padding:0;border-radius:50%;font-size:10px;font-weight:700;color:var(--mut);flex:none}
+.ttrow button.acet{width:18px;height:18px;font-size:9.5px}
+button.acet.on{color:var(--gold);border-color:rgba(176,141,63,.7);background:rgba(176,141,63,.12)}
 .legend .line{width:16px;height:2px;background:var(--sub);margin-left:10px}
 tr.tot td{font-weight:700;border-top:1px solid var(--line2)}
 .pill.good{background:var(--greenbg);color:var(--green);border:1px solid rgba(47,213,131,.3)}
@@ -465,7 +472,7 @@ function save() {
   }
 }
 let root = load();
-const UI = {tq: "", tShow: [], tShowAll: false, tSort: [["name", 1]], ttSort: [["race", 1]],
+const UI = {tq: "", tShow: [], tShowAll: false, tSort: [["name", 1]], ttSort: [["race", 1]], ttRole: "all",
             tf: {surf: {on: [], g: "A", any: false, open: false},
                  dist: {on: [], g: "A", any: false, open: false},
                  sty:  {on: [], g: "A", any: false, open: false},
@@ -1384,8 +1391,8 @@ function drawHints() {
 VIEWS.hints = () => { view.innerHTML = `<div class="card" id="pH"></div>`; drawHints(); };
 
 /* ---------------- Trials (Team Trials log) ---------------- */
-// A match is {t: time, e: [{id, di, sc, pl}] × 15}: who ran which race, their score and their
-// placing. Each match records its own lineup, so replacements are read from the log itself and
+// A match is {t: time, e: [{id, di, sc, pl, v, a}] × 15}: who ran which race, their score, their
+// placing, trained copy and whether they were the race's ace. Each match records its own lineup, so replacements are read from the log itself and
 // nothing like the sheet's "Prior" column has to be kept by hand.
 // Versions: in Team Trials you run trained copies, so "upgrading" is often a newly trained copy of
 // the same card. `ver` holds each card's current copy number (1 when absent), and every entry
@@ -1395,8 +1402,13 @@ function ttNorm(x) {
   if (!x || typeof x !== "object") return d;
   if (Array.isArray(x.lineup)) d.lineup = DISTS.map((_, di) => [0, 1, 2].map(k => {
     const v = x.lineup[di] && x.lineup[di][k]; return UBY[v] ? v : null; }));
-  if (Array.isArray(x.rounds)) d.rounds = x.rounds.filter(r => r && Array.isArray(r.e)).map(r => ({t: +r.t || 0,
-    e: r.e.filter(e => e && UBY[e.id] && e.di >= 0 && e.di < 5).map(e => ({id: e.id, di: e.di, sc: +e.sc || 0, pl: +e.pl || 0, v: Math.max(1, +e.v || 1)}))}));
+  // e.a = 1 for the race's ace. Recorded since 2026-10-22; older matches were saved in lineup order
+  // with the ace first, so the first runner of each race in them is its ace.
+  if (Array.isArray(x.rounds)) d.rounds = x.rounds.filter(r => r && Array.isArray(r.e)).map(r => {
+    const first = new Set();
+    return {t: +r.t || 0, e: r.e.filter(e => e && UBY[e.id] && e.di >= 0 && e.di < 5).map(e => ({id: e.id, di: e.di, sc: +e.sc || 0,
+      pl: +e.pl || 0, v: Math.max(1, +e.v || 1), a: "a" in e ? (e.a ? 1 : 0) : first.has(e.di) ? 0 : (first.add(e.di), 1)}))};
+  });
   if (x.ver && typeof x.ver === "object") for (const id in x.ver) if (UBY[id] && +x.ver[id] > 1) d.ver[id] = Math.round(+x.ver[id]);
   if (x.done && typeof x.done === "object") for (const k in x.done) if (x.done[k] === "a" || x.done[k] === "r") d.done[k] = x.done[k];
   return d;
@@ -1435,6 +1447,10 @@ function stat(xs) {
 const ttRange = (from, to) => root.tt.rounds.slice(Math.max(0, from), to);
 // One trainee's entries in one race, oldest first; v limits it to one trained copy.
 const ttOf = (rs, id, di, v) => rs.flatMap(r => r.e.filter(e => e.id === id && e.di === di && (v == null || (e.v || 1) === v)));
+const aceOf = (r, di) => (r.e.find(e => e.di === di && e.a) || {}).id;
+// Which results count under the Trials role filter: every run, ace runs only, or the rest.
+const roleOk = role => e => role === "ace" ? !!e.a : role === "non" ? !e.a : true;
+const ROLES = [["all", "All"], ["ace", "Ace"], ["non", "Not ace"]];
 const raceTotal = (r, di) => r.e.filter(e => e.di === di).reduce((a, e) => a + e.sc, 0);
 const teamTotal = r => r.e.reduce((a, e) => a + e.sc, 0);
 // Scores drift up over time, so swaps are judged on an inflation-free figure: the trainee's score
@@ -1515,9 +1531,11 @@ function slope(xs) {
 // with a moving average over Settings → Moving average matches (n); before the nth match it averages
 // every match so far.
 const maN = () => Math.max(1, Math.round(cfg().ttMA));
-function ttChart(id, di, k) {
-  const v = curV(id), pts = [], MA_N = maN();
-  root.tt.rounds.forEach((r, mi) => r.e.forEach(e => { if (e.id === id && e.di === di && (e.v || 1) === v && e[k]) pts.push([mi + 1, e[k]]); }));
+// Ace runs are solid dots on a shaded band, other runs hollow; a dashed line marks each change
+// of role. role limits the points (and so the average) to ace runs or the rest.
+function ttChart(id, di, k, role = UI.ttRole) {
+  const v = curV(id), pts = [], MA_N = maN(), ok = roleOk(role);
+  root.tt.rounds.forEach((r, mi) => r.e.forEach(e => { if (e.id === id && e.di === di && (e.v || 1) === v && e[k] && ok(e)) pts.push([mi + 1, e[k], e.a]); }));
   const ma = pts.map((_, i) => { const w = pts.slice(Math.max(0, i - MA_N + 1), i + 1); return w.reduce((a, p) => a + p[1], 0) / w.length; });
   const pl = k === "pl", W = 700, H = 300, L = 62, Rm = 14, T = 12, B = 38;
   const xs = pts.map(p => p[0]), all = pts.map(p => p[1]).concat(ma);
@@ -1536,19 +1554,25 @@ function ttChart(id, di, k) {
   const xstep = Math.max(1, Math.ceil((x1 - x0) / 12)), xt = [];
   for (let x = Math.ceil(x0); x <= x1; x += xstep) xt.push(x);
   const lab = y => pl ? y : fN(y), yName = pl ? "Place" : "Score";
+  // Each ace run shades out to halfway to its neighbours, so an ace stretch reads as one band.
+  const edge = (i, d) => { const j = i + d; return pts[j] ? (X(pts[i][0]) + X(pts[j][0])) / 2 : Math.min(W - Rm, Math.max(L, X(pts[i][0]) + d * 8)); };
+  const bands = pts.map((p, i) => p[2] ? `<rect class="aceband" x="${edge(i, -1).toFixed(1)}" y="${T}" width="${(edge(i, 1) - edge(i, -1)).toFixed(1)}" height="${H - T - B}"/>` : "").join("")
+    + pts.map((p, i) => i && !p[2] !== !pts[i - 1][2] ? `<line class="acech" x1="${edge(i, -1).toFixed(1)}" x2="${edge(i, -1).toFixed(1)}" y1="${T}" y2="${H - B}"/>` : "").join("");
   const svg = pts.length ? `<svg class="chart" viewBox="0 0 ${W} ${H}" width="100%">
     ${yt.map(y => `<line class="gr" x1="${L}" x2="${W - Rm}" y1="${Y(y)}" y2="${Y(y)}"/><text x="${L - 8}" y="${Y(y) + 3.5}" text-anchor="end">${lab(y)}</text>`).join("")}
     ${xt.map(x => `<text x="${X(x)}" y="${H - B + 16}" text-anchor="middle">${x}</text>`).join("")}
     <line class="ax" x1="${L}" x2="${W - Rm}" y1="${H - B}" y2="${H - B}"/>
     <text x="${(L + W - Rm) / 2}" y="${H - 4}" text-anchor="middle">Match</text>
     <text transform="translate(12 ${(T + H - B) / 2}) rotate(-90)" text-anchor="middle">${yName}</text>
+    ${bands}
     ${pts.length > 1 ? `<polyline class="ma" points="${pts.map((p, i) => `${X(p[0]).toFixed(1)},${Y(ma[i]).toFixed(1)}`).join(" ")}"/>` : ""}
-    ${pts.map((p, i) => `<circle class="pt" cx="${X(p[0]).toFixed(1)}" cy="${Y(p[1]).toFixed(1)}" r="3.5"><title>Match ${p[0]}: ${lab(p[1])} · avg ${pl ? ma[i].toFixed(2) : fN(ma[i])}</title></circle>`).join("")}
+    ${pts.map((p, i) => `<circle class="pt${p[2] ? "" : " na"}" cx="${X(p[0]).toFixed(1)}" cy="${Y(p[1]).toFixed(1)}" r="3.5"><title>Match ${p[0]}: ${lab(p[1])}${p[2] ? " · ace" : ""} · avg ${pl ? ma[i].toFixed(2) : fN(ma[i])}</title></circle>`).join("")}
   </svg>` : `<div class="muted">—</div>`;
-  const tb = (kk, l) => `<button class="small${kk === k ? " on" : ""}" data-act="ttchart" data-id="${id}" data-di="${di}" data-k="${kk}">${l}</button>`;
+  const tb = (kk, rr, l, on) => `<button class="small${on ? " on" : ""}" data-act="ttchart" data-id="${id}" data-di="${di}" data-k="${kk}" data-r="${rr}">${l}</button>`;
   modal(`<div class="mtitle">${vName(id, v)} · ${DISTS[di].n}</div><div class="msub">${esc(UBY[id].t)}</div>
-    <div class="row" style="margin:10px 0 6px;align-items:center">${tb("sc", "Score")}${tb("pl", "Place")}
-      <span class="legend"><i class="dot"></i>${yName}<i class="line"></i>${MA_N}-match average</span></div>${svg}`);
+    <div class="row" style="margin:10px 0 6px;align-items:center">${tb("sc", role, "Score", k === "sc")}${tb("pl", role, "Place", k === "pl")}<span class="vbar">|</span>
+      ${ROLES.map(([rr, l]) => tb(k, rr, l, rr === role)).join("")}
+      <span class="legend"><i class="dot"></i>Ace<i class="dot na"></i>Not ace<i class="line"></i>${MA_N}-match average</span></div>${svg}`);
 }
 VIEWS.trials = () => {
   view.innerHTML = `<div class="card" id="ttLine"></div><div class="card scroll" id="ttEntry"></div><div class="card scroll" id="ttUmas"></div>
@@ -1569,14 +1593,15 @@ function drawTrials() {
       // "New copy" starts the next copy of this card; until it has a match it can be taken back.
       const fresh = id && v > 1 && !ttOf(R, id, di, v).length;
       return `<div class="ttslot"><select class="mini" data-act="ttl" data-di="${di}" data-k="${k}">${opts(uo, id || "")}</select>
-        ${id ? `<span class="mono muted">v${v}</span><button class="x" data-act="ttver" data-id="${id}" data-d="${fresh ? -1 : 1}" title="${fresh ? "Undo new copy" : "New trained copy"}">${fresh ? "−v" : "+v"}</button>` : ""}</div>`; }).join("")}</div>`).join("")}</div>
+        ${id ? `<span class="mono muted">v${v}</span><button class="x" data-act="ttver" data-id="${id}" data-d="${fresh ? -1 : 1}" title="${fresh ? "Undo new copy" : "New trained copy"}">${fresh ? "−v" : "+v"}</button>
+          <button class="acet${k === 0 ? " on" : ""}" data-act="ttmkace" data-di="${di}" data-k="${k}" title="${k === 0 ? "Ace" : "Make ace"}">A</button>` : ""}</div>`; }).join("")}</div>`).join("")}</div>
     ${dup ? `<div class="banner amber" style="margin-top:10px">A trainee appears twice</div>` : ""}`;
   drawTtEntry();
   // Trainees in the current lineup, over the last N matches each ran in that race.
   const rows = [];
   DISTS.forEach((d, di) => L[di].forEach(id => { if (id) {
     // Current trained copy only: an older copy's results say nothing about this one.
-    const es = ttOf(R, id, di, curV(id)).slice(-N), s = stat(es.map(e => e.sc)), p = stat(es.filter(e => e.pl).map(e => e.pl));
+    const es = ttOf(R, id, di, curV(id)).filter(roleOk(UI.ttRole)).slice(-N), s = stat(es.map(e => e.sc)), p = stat(es.filter(e => e.pl).map(e => e.pl));
     rows.push({id, di, es, s, p, risk: s ? s.m - cfg().ttRisk * s.sd : null});
   }}));
   const ms = rows.filter(r => r.s).map(r => r.s.m), lo = Math.min(...ms), hi = Math.max(...ms);
@@ -1606,7 +1631,7 @@ function drawTrials() {
   const TIP = {
     race: "The race this trainee runs. Sorting by it restores lineup order.",
     name: "The trainee in this lineup slot.",
-    runs: "Matches counted: this trained copy in this race, up to the Matches averaged setting.",
+    runs: "Matches counted: this trained copy in this race, up to the Matches averaged setting. All / Ace / Not ace limits every figure to runs in that role.",
     avg: "Average score over those matches.",
     norm: "Average scaled across the lineup: lowest 0%, highest 100%.",
     top: "How far this average is below the best average in the lineup.",
@@ -1624,11 +1649,12 @@ function drawTrials() {
   const tth = (k, l, c = "") => sortHead(UI.ttSort, "tt", k, l, "hastip " + c, ` data-tip="${esc(TIP[k])}"`, k === "race");
   const off = v => v == null ? "" : Math.abs(v) < .05 ? "—" : `<span class="neg">${v.toFixed(1)}%</span>`;
   const sparkBtn = (r, k, svg) => svg && `<button class="sparkb" data-act="ttchart" data-id="${r.id}" data-di="${r.di}" data-k="${k}">${svg}</button>`;
-  $("ttUmas").innerHTML = `<div class="head">Trainees<span class="vbar">|</span>Last ${N}</div>
+  $("ttUmas").innerHTML = `<div class="head" style="display:flex;align-items:center">Trainees<span class="vbar">|</span>Last ${N}
+      <span class="row" style="margin-left:auto;gap:6px">${ROLES.map(([k, l]) => `<button class="small${UI.ttRole === k ? " on" : ""}" data-act="ttrole" data-r="${k}">${l}</button>`).join("")}</span></div>
     <table><thead><tr>${tth("race", "Race")}${tth("name", "Trainee")}${tth("runs", "Runs", "num")}${tth("avg", "Avg", "num")}${tth("norm", "Norm", "num")}${tth("top", "vs Top", "num")}${tth("rtop", "vs Race", "num")}${tth("sd", "SD", "num")}${tth("cv", "CV", "num")}
       ${tth("hi", "High", "num")}${tth("lo", "Low", "num")}${tth("trend", "Trend")}${tth("place", "Place", "num")}${tth("pmode", "Mode", "num")}${tth("ptrend", "Place trend")}${tth("rank", "Replace", "num")}</tr></thead><tbody>
     ${shown.map(r => { const rk = r.rk, nm = r.s && hi > lo ? (r.s.m - lo) / (hi - lo) * 100 : null;
-      return `<tr><td>${DISTS[r.di].n}</td><td>${uName(UBY[r.id])}</td><td class="num">${r.s ? r.s.n : ""}</td>
+      return `<tr><td>${DISTS[r.di].n}</td><td>${uName(UBY[r.id])}${L[r.di][0] === r.id ? ` <span class="ace">Ace</span>` : ""}</td><td class="num">${r.s ? r.s.n : ""}</td>
         <td class="num gold">${r.s ? n(r.s.m) : ""}</td><td class="num">${nm == null ? "" : nm.toFixed(1) + "%"}</td>
         <td class="num">${off(r.offAll)}</td><td class="num">${off(r.offRace)}</td>
         <td class="num">${r.s && r.s.n > 1 ? n(r.s.sd) : ""}</td><td class="num">${r.s && r.s.n > 1 ? (r.s.cv * 100).toFixed(0) + "%" : ""}</td>
@@ -1689,19 +1715,21 @@ function drawTrials() {
   $("ttLog").innerHTML = `<div class="head">Matches<span class="vbar">|</span>${R.length}</div>
     <table><thead><tr><th class="num">#</th><th>Date</th><th class="num">Team</th>${DISTS.map(d => `<th class="num">${d.n}</th>`).join("")}<th></th></tr></thead><tbody>
     ${R.map((r, i) => `<tr${UI.ttEdit === i ? ' class="sorted"' : ""}><td class="num">${i + 1}</td><td class="mono">${r.t ? new Date(r.t).toISOString().slice(0, 10) : ""}</td>
-      <td class="num gold">${n(teamTotal(r))}</td>${DISTS.map((d, di) => `<td class="num">${n(raceTotal(r, di))}</td>`).join("")}
+      <td class="num gold">${n(teamTotal(r))}</td>${DISTS.map((d, di) => { const was = i && aceOf(R[i - 1], di), now = aceOf(r, di);
+        return `<td class="num">${was && now && was !== now ? `<span class="ace" style="margin:0 6px 0 0" title="Ace: ${esc(UBY[was].n)} → ${esc(UBY[now].n)}">A</span>` : ""}${n(raceTotal(r, di))}</td>`; }).join("")}
       <td><button class="small" data-act="ttedit" data-i="${i}">Edit</button> <button class="x" data-act="ttdel" data-i="${i}">×</button></td></tr>`).reverse().join("") || `<tr><td colspan="9" class="muted">—</td></tr>`}</tbody></table>`;
 }
 // Entry form: 15 rows of score + placement. A new match takes the current lineup; editing an old
 // one keeps that match's own trainees.
 function drawTtEntry(msgText) {
   const R = root.tt.rounds, edit = UI.ttEdit != null && R[UI.ttEdit];
-  const src = edit ? edit.e : DISTS.flatMap((d, di) => root.tt.lineup[di].map(id => id && {id, di, sc: "", pl: ""}));
+  // The ace defaults to the lineup's first slot (or the saved match's ace) and can be changed per match.
+  const src = edit ? edit.e : DISTS.flatMap((d, di) => root.tt.lineup[di].map((id, k) => id && {id, di, sc: "", pl: "", a: k === 0 ? 1 : 0}));
   const ready = src.length === 15 && src.every(Boolean);
   const fmt = v => v === "" || v == null ? "" : String(v);
   $("ttEntry").innerHTML = `<div class="head">${edit ? `Edit match ${UI.ttEdit + 1}` : "Add match"}</div>
     ${ready ? `<div class="ttgrid">${DISTS.map((d, di) => `<div><div class="lbl">${d.n}</div>
-      ${src.map((e, j) => e.di === di ? `<div class="ttrow"><span class="nm" title="${esc(UBY[e.id].t)}">${esc(UBY[e.id].n)}</span>
+      ${src.map((e, j) => e.di === di ? `<div class="ttrow"><button class="acet${e.a ? " on" : ""}" tabindex="-1" data-act="ttace" data-di="${di}" data-j="${j}" title="Ace">A</button><span class="nm" title="${esc(UBY[e.id].n + " · " + UBY[e.id].t)}">${esc(UBY[e.id].n)}</span>
         <input class="mini pl" inputmode="numeric" placeholder="#" data-tt="pl" data-j="${j}" value="${fmt(e.pl || "")}">
         <input class="mini" inputmode="numeric" placeholder="Score" data-tt="sc" data-j="${j}" value="${fmt(e.sc)}"></div>` : "").join("")}</div>`).join("")}</div>
       <div class="row" style="margin-top:10px"><button class="primary" data-act="ttsave">${edit ? "Save" : "Add"}</button>${edit ? `<button class="small" data-act="ttcancel">Cancel</button>` : ""}</div>`
@@ -1711,7 +1739,8 @@ function ttSave() {
   const R = root.tt.rounds, edit = UI.ttEdit != null && R[UI.ttEdit];
   const src = edit ? edit.e : DISTS.flatMap((d, di) => root.tt.lineup[di].map(id => ({id, di})));
   const val = (k, j) => { const el = view.querySelector(`input[data-tt="${k}"][data-j="${j}"]`); return el ? el.value.replace(/[,\s]/g, "") : ""; };
-  const e = src.map((x, j) => ({id: x.id, di: x.di, sc: Math.round(+val("sc", j)), pl: Math.round(+val("pl", j)), v: edit ? (x.v || 1) : curV(x.id)}));
+  const ace = j => view.querySelector(`button[data-act="ttace"][data-j="${j}"]`).classList.contains("on") ? 1 : 0;
+  const e = src.map((x, j) => ({id: x.id, di: x.di, sc: Math.round(+val("sc", j)), pl: Math.round(+val("pl", j)), v: edit ? (x.v || 1) : curV(x.id), a: ace(j)}));
   const bad = e.filter(x => !(x.sc > 0) || !(x.pl >= 1 && x.pl <= 18)).length;
   if (bad) { drawTtEntry(`${bad} of 15 rows need a score and a placement.`); return; }
   if (edit) edit.e = e; else R.push({t: Date.now(), e});
@@ -1851,7 +1880,12 @@ function onClick(e) {
     case "ttsave": ttSave(); break;
     case "ttver": { const nv = curV(id) + +el.dataset.d; if (nv > 1) root.tt.ver[id] = nv; else delete root.tt.ver[id]; save(); drawTrials(); break; }
     case "ttcancel": UI.ttEdit = null; drawTrials(); break;
-    case "ttchart": ttChart(id, +el.dataset.di, el.dataset.k); break;
+    case "ttchart": ttChart(id, +el.dataset.di, el.dataset.k, el.dataset.r || UI.ttRole); break;
+    case "ttrole": UI.ttRole = el.dataset.r; drawTrials(); break;
+    // Ace in the lineup: swap the chosen runner into the race's first slot.
+    case "ttmkace": { const row = root.tt.lineup[+el.dataset.di], k = +el.dataset.k; if (k) { [row[0], row[k]] = [row[k], row[0]]; save(); drawTrials(); } break; }
+    // Ace in the match form: one per race; the form isn't redrawn, so typed values stay.
+    case "ttace": view.querySelectorAll(`button[data-act="ttace"][data-di="${el.dataset.di}"]`).forEach(b => b.classList.toggle("on", b === el)); break;
     case "ttsettled": UI.ttSettled = !UI.ttSettled; drawTrials(); break;
     case "ttok": case "ttrev": case "ttundo": {
       const c = ttChanges().find(x => chKey(x) === el.dataset.key);

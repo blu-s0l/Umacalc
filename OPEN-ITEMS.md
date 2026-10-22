@@ -40,7 +40,7 @@ Umamusume: Pretty Derby (Global). One `index.html` in the house style from
   - Teams owns its three lists; Lowest aptitude and Alternatives belong to Settings.
 
 - **Trials tab: a Team Trials log** (2026-10-18), modelled on the "TT" tab of Steve's sheet.
-  - **Stored:** `root.tt = {lineup: 5×3 card ids, rounds: [{t, e: [{id, di, sc, pl, v}] ×15}], ver, done}`.
+  - **Stored:** `root.tt = {lineup: 5×3 card ids (first = ace), rounds: [{t, e: [{id, di, sc, pl, v, a}] ×15}], ver, done}`.
   - **Each match records its own lineup,** so replacements come from the log and there is no
     manual Prior column.
   - **Lineup:** set by hand, or with Teams → "Use as Trials lineup" (ace first in each race).
@@ -84,6 +84,17 @@ Umamusume: Pretty Derby (Global). One `index.html` in the house style from
     a chart of that copy's full history in that race: every match as a point on Match × Score
     (or Place) axes, with an n-match moving average (Settings → Moving average, default 8; 2026-10-21). Before
     the nth match the average covers every match so far, whatever n is. Score/Place buttons switch between the two.
+  - **Ace tracking** (2026-10-22). Each entry stores `e.a` (1 = that race's ace). Older matches
+    were saved in lineup order, ace first, so the first runner of each race is migrated as ace.
+    The lineup's first slot is the ace; "A" on another slot swaps it into first. The match form
+    has an "A" toggle per runner, defaulting to the lineup's ace (or the saved one when editing),
+    so a match can record a different ace. Ace changes are not replacements and open no test.
+    The Trainees table marks the current ace and has All / Ace / Not ace buttons that limit every
+    figure, the sparklines and the replace rank to runs in that role. The chart shows ace runs as
+    solid dots on a shaded band and other runs hollow, with a dashed line at each role change, and
+    the same role buttons (they filter the points and the moving average). The Matches log puts a
+    gold "A" beside a race total when that race's ace changed from the match before (hover: who →
+    who).
   - **Accept / Revert** (2026-10-21; Steve wanted a way to clear replacements). Accept closes a
     swap's test. Revert puts the outgoing copy back in the newcomer's slot (copy number too) after
     a confirmation; it's disabled once the newcomer has left the slot or the old trainee runs

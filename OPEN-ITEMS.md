@@ -75,7 +75,7 @@ Umamusume: Pretty Derby (Global). One `index.html` in the house style from
     needed, from `needPaired`, "100+" past 100), grey under 3 shared matches.
   - **Tests use all data; displays use the last N** (2026-10-22; Steve's call). A trained copy
     doesn't change, so its old matches count as much as new ones, and the inflation-free and ace
-    adjustments handle drift. So the Replacements trainee test, Δ adj and Need use every match
+    adjustments handle drift. So the Replacements trainee test and Need use every match
     before the swap (outgoing copy, that race) and every match after it up to the next swap; Need
     is a true countdown again ("100+" past 100). Raw figures that drift with score inflation stay
     on N either side: Before/After averages, Race Δ, Team Δ and its verdict, Place. The Trainees
@@ -97,7 +97,13 @@ Umamusume: Pretty Derby (Global). One `index.html` in the house style from
   - **The sheet's history was loaded once** into Steve's own browser (2026-10-18) by a temporary
     seed, since removed. The app starts empty for everyone else.
   - **Inflation-free tests** (2026-10-18; Steve: "points naturally rise over time"). The trainee
-    verdict, "Δ adj" and "Need" use each score as a share of the other 14 in the same match.
+    verdict and "Need" use each score as a share of the other 14 in the same match, with the ace
+    bonus taken out of every score (`aceAdj`; fixed 2026-10-22, before which a swap that changed
+    the ace role was off by ~10%). The verdict's hover says so, with the match counts.
+  - **Δ is the plain trainee change** (2026-10-22; Steve: the teammate-share "Δ adj" was
+    excessive next to Team Δ). Δ = After average ÷ Before average − 1, the same raw numbers the
+    row shows. When the ace role differs between the two sides, its hover gives the ace-run counts,
+    since ace scores carry the bonus.
     Before/After still show raw averages; Race Δ and Team Δ stay raw.
   - **"Need":** the extra matches the gap seen so far needs to reach |t| = 2, or "can't confirm"
     when the gap is too small to prove against the before sample. Rough guide from his sheet's

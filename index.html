@@ -1481,9 +1481,13 @@ const ACE_TIP_OFF = "Make ace: swaps this runner with the current ace, so the tw
 const ROLES = [["all", "All"], ["ace", "Ace"], ["non", "Not ace"]];
 const raceTotal = (r, di) => r.e.filter(e => e.di === di).reduce((a, e) => a + e.sc, 0);
 const teamTotal = r => r.e.reduce((a, e) => a + e.sc, 0);
+// A score with the ace's bonus taken back out (Settings → Ace bonus %), so the role never counts
+// as the runner's own strength.
+const aceAdj = e => e.a ? e.sc / (1 + cfg().ttAce / 100) : e.sc;
 // Scores drift up over time, so swaps are judged on an inflation-free figure: the trainee's score
-// as a share of the average of the other 14 in that same match (1.10 = 10% above teammates).
-const relScore = (r, e) => { const o = r.e.filter(x => x !== e); return o.length ? e.sc / (o.reduce((a, x) => a + x.sc, 0) / o.length) : 1; };
+// as a share of the average of the other 14 in that same match (1.10 = 10% above teammates), all
+// with the ace bonus removed.
+const relScore = (r, e) => { const o = r.e.filter(x => x !== e); return o.length ? aceAdj(e) / (o.reduce((a, x) => a + aceAdj(x), 0) / o.length) : 1; };
 const relOf = (rs, id, di, v) => rs.flatMap(r => r.e.filter(e => e.id === id && e.di === di && (e.v || 1) === v).map(e => relScore(r, e)));
 // Replacements, read from consecutive matches: in a race, whichever copy left and whichever
 // arrived (a new copy of the same card counts). Swapping back to whoever an earlier swap took
@@ -1652,7 +1656,7 @@ function drawTrials() {
   // scorer. Ace runs are taken back down by the Ace bonus % setting so the sitting ace isn't
   // flattered. Top % (current form, last N runs, every role) = share of matches where the runner
   // outscored everyone else in the race.
-  const bonus = 1 + cfg().ttAce / 100, adj = e => e.a ? e.sc / bonus : e.sc;
+  const adj = aceAdj;
   rows.forEach(r => {
     const v = curV(r.id);
     r.runs = new Map();                                     // match index → entry, current copy, oldest first
@@ -1748,6 +1752,10 @@ function drawTrials() {
   // mean a swap can lift or sink teammates too).
   // Accepted or reverted swaps drop out of the table; "Settled" shows them again, dimmed.
   const ch = ttChanges(), nDone = ch.filter(chDone).length;
+  // Δ is plain After vs Before; when the ace role differs between the two, say so on hover, since
+  // ace scores carry the bonus.
+  const aceNote = (a, b) => { const x = a.filter(e => e.a).length, y = b.filter(e => e.a).length;
+    return x / (a.length || 1) === y / (b.length || 1) ? "" : ` title="Ace runs: ${x} of ${a.length} before, ${y} of ${b.length} after. Ace scores include the ace bonus."`; };
   const sw = ch.map((c, i) => {
     const st = chDone(c);
     if (st && !UI.ttSettled) return "";
@@ -1761,8 +1769,8 @@ function drawTrials() {
     // reaching back past any revert (a reverted swap means it was never really gone); after = all
     // matches since, up to the race's next swap. A trained copy doesn't change, so old matches
     // count as much as new ones, and the inflation-free relative scores cancel score drift.
-    // The raw figures (Before/After, Race Δ, Team Δ, Place) stay on N either side, since raw
-    // scores drift up over time.
+    // The raw figures (Before/After and the trainee's Δ between them, Race Δ, Team Δ, Place) stay
+    // on N either side, since raw scores drift up over time.
     const beforeAll = R.slice(0, c.at).filter(r => r.e.some(e => e.id === c.out && e.di === c.di && (e.v || 1) === c.ov));
     const afterAll = ttRange(c.at, nextAt), before = beforeAll.slice(-N), after = afterAll.slice(0, N);
     const a = ttOf(before, c.out, c.di, c.ov), b = ttOf(after, c.in, c.di, c.nv);
@@ -1775,15 +1783,15 @@ function drawTrials() {
     const pa = stat(a.filter(e => e.pl).map(e => e.pl)), pb = stat(b.filter(e => e.pl).map(e => e.pl));
     return `<tr${st ? ' class="off"' : ""}><td class="num">${c.at + 1}</td><td>${DISTS[c.di].n}</td><td>${who}</td>
       <td class="num">${sa ? n(sa.m) : ""}<span class="muted"> ${sa ? sa.n : ""}</span></td><td class="num">${sb ? n(sb.m) : ""}<span class="muted"> ${sb ? sb.n : ""}</span></td>
-      <td class="num" title="${ar.length} matches before · ${br.length} after">${ar.length && br.length ? fPct(pct(stat(ar).m, stat(br).m)) : ""}</td>
-      <td>${vPill(v)}${c.revertedAt ? ` <span class="muted">reverted at ${c.revertedAt + 1}</span>` : ""}</td><td class="num muted">${needTxt}</td>
+      <td class="num"${aceNote(a, b)}>${sa && sb ? fPct(pct(sa.m, sb.m)) : ""}</td>
+      <td title="Judged on this trainee's share of teammates' scores in each match, so score inflation and the ace bonus cancel: ${ar.length} matches before, ${br.length} after.">${vPill(v)}${c.revertedAt ? ` <span class="muted">reverted at ${c.revertedAt + 1}</span>` : ""}</td><td class="num muted">${needTxt}</td>
       <td class="num">${ra.length && rb.length ? fPct(pct(stat(ra).m, stat(rb).m)) : ""}</td>
       <td class="num">${ta.length && tb.length ? fPct(pct(stat(ta).m, stat(tb).m)) : ""}</td><td>${vPill(verdict(ta, tb))}</td>
       <td class="num">${pa && pb ? `${pa.m.toFixed(2)} → ${pb.m.toFixed(2)}` : ""}</td><td style="white-space:nowrap">${act}</td></tr>`;
   }).reverse().join("");
   $("ttSwaps").innerHTML = `<div class="head" style="display:flex;align-items:center">Replacements
       ${nDone ? `<button class="small${UI.ttSettled ? " on" : ""}" style="margin-left:auto" data-act="ttsettled">Settled · ${nDone}</button>` : ""}</div>
-    <table><thead><tr><th class="num">Match</th><th>Race</th><th>Out → In</th><th class="num">Before</th><th class="num">After</th><th class="num" title="Share of teammates' average, so score inflation cancels. Uses every match before and after the swap; the trainee test and Need use the same.">Δ adj</th><th>Trainee</th><th class="num">Need</th>
+    <table><thead><tr><th class="num">Match</th><th>Race</th><th>Out → In</th><th class="num">Before</th><th class="num">After</th><th class="num" title="Change in this trainee's average score, After vs Before.">Δ</th><th>Trainee</th><th class="num">Need</th>
       <th class="num">Race Δ</th><th class="num">Team Δ</th><th>Team</th><th class="num">Place</th><th></th></tr></thead><tbody>${sw || `<tr><td colspan="13" class="muted">—</td></tr>`}</tbody></table>`;
   // Match log, newest first.
   // Collapsible like the Planner's sections (state kept in root.plan.open under "ttLog").
@@ -1843,7 +1851,7 @@ VIEWS.settings = () => {
     ttN: "How many recent matches every Trials figure uses: averages, spread, the replace ranking and replacement reviews.",
     ttRisk: "The replace order sorts by average − this × std dev. 0 ranks by average alone; higher values favour steadier trainees.",
     ttMA: "Matches in the moving average on the trend charts. Until a trainee has that many, each point averages every match so far.",
-    ttAce: "The ace's bonus already included in the scores you enter (GameTora: +10% of the ace's points). Top % and Best ace take it back out so the ace isn't flattered. Set 0 if you enter scores before the bonus.",
+    ttAce: "The ace's bonus already included in the scores you enter (GameTora: +10% of the ace's points). Top %, Best ace and the replacement test take it back out so the ace isn't flattered. Set 0 if you enter scores before the bonus.",
   };
   view.innerHTML = `<div class="card"><div class="head">Team building</div>
     <div class="fields sfields">

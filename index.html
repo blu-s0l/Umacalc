@@ -1523,10 +1523,9 @@ function verdict(a, b) {
   return t >= 2 ? "Better" : t <= -2 ? "Worse" : "Unclear";
 }
 // Matches still needed after a swap for the gap seen so far, if it holds, to reach |t| = 2.
-// Uses the same spread as the samples. The "after" window stops at cap matches (Matches averaged),
-// so null = the gap is too small to confirm within it: against this many "before" matches, or
-// before the window is full.
-function needMore(a, b, cap) {
+// Uses the same spread as the samples. null = the gap is too small to confirm against this many
+// "before" matches, however long you wait (or within cap "after" matches, when given).
+function needMore(a, b, cap = Infinity) {
   if (a.length < 2 || !b.length) return undefined;
   const A = stat(a), B = stat(b), sb = b.length > 1 ? B.sd : A.sd;
   const room = ((B.m - A.m) / 2) ** 2 - A.sd ** 2 / A.n;
@@ -1545,16 +1544,13 @@ function spark(xs, inv) {
   const y = v => hi === lo ? h / 2 : inv ? 2 + (v - lo) / (hi - lo) * (h - 4) : h - 2 - (v - lo) / (hi - lo) * (h - 4);
   return `<svg class="spark" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}"><polyline fill="none" stroke="var(--gold)" stroke-width="1.5" points="${xs.map((v, i) => `${(i * sx).toFixed(1)},${y(v).toFixed(1)}`).join(" ")}"/></svg>`;
 }
-// Two runners compared over the same trailing window: matches each still needs for the gap seen so
-// far, if it holds, to reach |t| = 2 as their samples grow together. The window holds at most cap
-// matches (Matches averaged), and once full a new match only pushes an old one out, so null = the
-// gap is too small to confirm within that many matches, however long you wait.
-function needBoth(a, b, cap) {
-  if (a.length < 2 || b.length < 2) return undefined;
-  const A = stat(a), B = stat(b), d = B.m - A.m;
-  if (!d) return null;
-  const n = Math.ceil(4 * (A.sd ** 2 + B.sd ** 2) / d ** 2);
-  return n > cap ? null : Math.max(0, n - Math.min(a.length, b.length));
+// Paired comparison (one edge per shared match): shared matches still needed for the average edge
+// seen so far, if it holds, to reach t = 2. null = no edge to confirm.
+function needPaired(x) {
+  if (x.length < 2) return undefined;
+  const S = stat(x);
+  if (!S.m) return null;
+  return Math.max(0, Math.ceil(4 * S.sd ** 2 / S.m ** 2) - x.length);
 }
 // Least-squares slope of a series against its position, per step.
 function slope(xs) {
@@ -1653,36 +1649,44 @@ function drawTrials() {
     r.pslope = -slope(r.pls);
   });
   // Ace pick. The ace earns +10% of their own points, so the best ace is simply the race's highest
-  // scorer. Over each runner's last N runs in the race (every role), ace runs are taken back down
-  // by the Ace bonus % setting so the sitting ace isn't flattered. Top % = share of those matches
-  // where the runner outscored everyone else in the race. The test runs on the same adjusted scores
-  // as a share of teammates' (inflation-free), like the Replacements table.
+  // scorer. Ace runs are taken back down by the Ace bonus % setting so the sitting ace isn't
+  // flattered. Top % (current form, last N runs, every role) = share of matches where the runner
+  // outscored everyone else in the race.
   const bonus = 1 + cfg().ttAce / 100, adj = e => e.a ? e.sc / bonus : e.sc;
   rows.forEach(r => {
-    const v = curV(r.id), runs = [];
-    R.forEach(m => { const e = m.e.find(x => x.id === r.id && x.di === r.di && (x.v || 1) === v); if (e) runs.push([m, e]); });
-    const lastN = runs.slice(-N);
-    r.adj = lastN.map(([, e]) => adj(e));
-    r.adjM = r.adj.length ? r.adj.reduce((a, b) => a + b, 0) / r.adj.length : null;
-    r.arel = lastN.map(([m, e]) => { const o = m.e.filter(x => x !== e); return o.length ? adj(e) / (o.reduce((a, x) => a + adj(x), 0) / o.length) : 1; });
-    const tops = lastN.filter(([m, e]) => m.e.filter(x => x.di === r.di && x !== e).every(x => adj(e) > adj(x))).length;
+    const v = curV(r.id);
+    r.runs = new Map();                                     // match index → entry, current copy, oldest first
+    R.forEach((m, i) => { const e = m.e.find(x => x.id === r.id && x.di === r.di && (x.v || 1) === v); if (e) r.runs.set(i, e); });
+    const lastN = [...r.runs].slice(-N);
+    const tops = lastN.filter(([i, e]) => R[i].e.filter(x => x.di === r.di && x !== e).every(x => adj(e) > adj(x))).length;
     r.topPct = lastN.length ? tops / lastN.length * 100 : null;
   });
+  // Best ace: head-to-head over every match two runners (current copies) shared in the race, not
+  // just the last N; a trained copy doesn't change, so old matches count as much as new ones. Each
+  // shared match gives one comparison, the ratio of adjusted scores; same match means same
+  // opponents and conditions, so match-to-match swings cancel. Ranked by summed average edge over
+  // the race's others; the test is a paired t on the per-match edges against the current ace (or,
+  // for the ace, the runner-up).
+  const h2h = (a, b) => { const d = []; for (const [i, e] of b.runs) { const o = a.runs.get(i); if (o) d.push(adj(e) / adj(o) - 1); } return d; };
   DISTS.forEach((d, di) => {
-    const rs = rows.filter(r => r.di === di && r.adjM != null).sort((a, b) => b.adjM - a.adjM);
+    const rs = rows.filter(r => r.di === di && r.runs.size);
     if (!rs.length) return;
+    rs.forEach(r => { r.edge = rs.filter(o => o !== r).reduce((a, o) => { const x = stat(h2h(o, r)); return a + (x ? x.m : 0); }, 0); });
+    rs.sort((a, b) => b.edge - a.edge);
     const best = rs[0], cur = rs.find(r => r.id === L[di][0]), rival = best === cur || !cur ? rs[1] : cur;
-    best.best = rival ? {rival, cur: best === cur, gap: pct(rival.adjM, best.adjM), v: verdict(rival.arel, best.arel), need: needBoth(rival.arel, best.arel, N)}
-      : {cur: best === cur, v: "Too early"};
+    if (!rival) { best.best = {cur: best === cur, n: 0, v: "Too early"}; return; }
+    const x = h2h(rival, best), st = stat(x);
+    const t = !st || st.n < 2 ? 0 : st.sd ? st.m / (st.sd / Math.sqrt(st.n)) : st.m > 0 ? Infinity : 0;
+    best.best = {rival, cur: best === cur, n: x.length, gap: st ? st.m * 100 : 0,
+      v: x.length < 3 ? "Too early" : t >= 2 ? "Better" : "Unclear", need: needPaired(x)};
   });
   const bestTag = r => {
     const b = r.best;
     if (!b) return "";
-    const why = b.v === "Better" ? "The gap is clear." : b.v === "Too early" ? "Too few matches to judge yet."
-      : b.need === null ? `Too close to confirm within ${N} races.` : b.need ? `About ${b.need} more matches each to confirm.` : "Unclear so far.";
-    const title = !b.rival ? `Highest score in ${DISTS[r.di].n}, ace bonus removed. ${why}`
-      : `${b.gap.toFixed(1)}% ahead of ${UBY[b.rival.id].n}${b.cur ? "" : " (the current ace)"} over the last ${N} runs, ace bonus removed. ${why}`;
-    // "Worse" can only mean the inflation-free test disagrees with the raw averages: still unclear.
+    const why = b.v === "Better" ? "The gap is clear." : b.v === "Too early" ? "Too few shared matches to judge yet."
+      : b.need === null ? "No gap to confirm." : b.need > 100 ? "Would take 100+ more shared matches to confirm." : b.need ? `About ${b.need} more shared matches to confirm.` : "Unclear so far.";
+    const title = !b.rival ? `Only runner in ${DISTS[r.di].n} with matches. ${why}`
+      : `${b.gap.toFixed(1)}% ahead of ${UBY[b.rival.id].n}${b.cur ? "" : " (the current ace)"} head-to-head over ${b.n} shared matches, ace bonus removed. ${why}`;
     const cls = b.v === "Better" ? "good" : b.v === "Too early" ? "mute" : "warn";
     return ` <span class="pill ${cls}" title="${esc(title)}">Best ace${!b.cur && b.rival ? ` +${b.gap.toFixed(1)}%` : ""}</span>`;
   };
@@ -1709,7 +1713,7 @@ function drawTrials() {
     hi: "Best single score over those matches.",
     lo: "Worst single score over those matches.",
     place: "Average finishing place (1 = first).",
-    toppct: "Share of this runner's last N races (every role) where they outscored everyone else in the race, after taking the ace bonus back out. Ignores All / Ace / Not ace. The highest average in each race is tagged Best ace; hover the tag for the gap and how sure it is.",
+    toppct: "Share of this runner's last N races (every role) where they outscored everyone else in the race, after taking the ace bonus back out. Ignores All / Ace / Not ace. Best ace is separate: it compares runners head-to-head over every match they shared; hover the tag for the gap and how sure it is.",
     trend: "Scores over those matches, oldest to newest. Sorts by the fitted slope, as % of the average per match. Click a line for the full chart.",
     ptrend: "Placings over those matches, oldest to newest, 1st at the top. Sorts by places gained per match, from the fitted slope. Click a line for the full chart.",
     rank: "Replace order: 1 is the first to swap out. Ranked by average − Consistency weight × SD.",
@@ -1753,23 +1757,25 @@ function drawTrials() {
       : `<button class="small" data-act="ttok" data-key="${key}">Accept</button> <button class="small" data-act="ttrev" data-key="${key}"${revSlot(c) < 0 ? ` disabled title="${esc(UBY[c.in].n)} is no longer in this slot, or ${esc(UBY[c.out].n)} is running elsewhere"` : ""}>Revert</button>`;
     if (c.revert) return `<tr class="off"><td class="num">${c.at + 1}</td><td>${DISTS[c.di].n}</td><td>${who}</td>
       <td colspan="9"><span class="pill mute">Revert</span> <span class="muted">undoes match ${c.revert.at + 1}</span></td><td></td></tr>`;
-    // Before: the outgoing copy's own last N matches in this race, reaching back past any revert
-    // (a reverted swap means it was never really gone). After: matches since, up to the race's
-    // next swap.
-    const before = R.slice(0, c.at).filter(r => r.e.some(e => e.id === c.out && e.di === c.di && (e.v || 1) === c.ov)).slice(-N);
-    const after = ttRange(c.at, Math.min(nextAt, c.at + N));
+    // The trainee test uses every match: before = all the outgoing copy's matches in this race,
+    // reaching back past any revert (a reverted swap means it was never really gone); after = all
+    // matches since, up to the race's next swap. A trained copy doesn't change, so old matches
+    // count as much as new ones, and the inflation-free relative scores cancel score drift.
+    // The raw figures (Before/After, Race Δ, Team Δ, Place) stay on N either side, since raw
+    // scores drift up over time.
+    const beforeAll = R.slice(0, c.at).filter(r => r.e.some(e => e.id === c.out && e.di === c.di && (e.v || 1) === c.ov));
+    const afterAll = ttRange(c.at, nextAt), before = beforeAll.slice(-N), after = afterAll.slice(0, N);
     const a = ttOf(before, c.out, c.di, c.ov), b = ttOf(after, c.in, c.di, c.nv);
-    // The test runs on inflation-free relative scores; Before/After show the raw averages.
-    const ar = relOf(before, c.out, c.di, c.ov), br = relOf(after, c.in, c.di, c.nv);
-    const v = verdict(ar, br), need = needMore(ar, br, N);
-    const needTxt = v === "Better" || v === "Worse" || need === undefined ? "" : need === null ? "can't confirm" : need ? `~${need}` : "";
+    const ar = relOf(beforeAll, c.out, c.di, c.ov), br = relOf(afterAll, c.in, c.di, c.nv);
+    const v = verdict(ar, br), need = needMore(ar, br);
+    const needTxt = v === "Better" || v === "Worse" || need === undefined ? "" : need === null ? "can't confirm" : need > 100 ? "100+" : need ? `~${need}` : "";
     const ra = before.map(r => raceTotal(r, c.di)), rb = after.map(r => raceTotal(r, c.di));
     const ta = before.map(teamTotal), tb = after.map(teamTotal);
     const sa = stat(a.map(e => e.sc)), sb = stat(b.map(e => e.sc));
     const pa = stat(a.filter(e => e.pl).map(e => e.pl)), pb = stat(b.filter(e => e.pl).map(e => e.pl));
     return `<tr${st ? ' class="off"' : ""}><td class="num">${c.at + 1}</td><td>${DISTS[c.di].n}</td><td>${who}</td>
       <td class="num">${sa ? n(sa.m) : ""}<span class="muted"> ${sa ? sa.n : ""}</span></td><td class="num">${sb ? n(sb.m) : ""}<span class="muted"> ${sb ? sb.n : ""}</span></td>
-      <td class="num">${ar.length && br.length ? fPct(pct(stat(ar).m, stat(br).m)) : ""}</td>
+      <td class="num" title="${ar.length} matches before · ${br.length} after">${ar.length && br.length ? fPct(pct(stat(ar).m, stat(br).m)) : ""}</td>
       <td>${vPill(v)}${c.revertedAt ? ` <span class="muted">reverted at ${c.revertedAt + 1}</span>` : ""}</td><td class="num muted">${needTxt}</td>
       <td class="num">${ra.length && rb.length ? fPct(pct(stat(ra).m, stat(rb).m)) : ""}</td>
       <td class="num">${ta.length && tb.length ? fPct(pct(stat(ta).m, stat(tb).m)) : ""}</td><td>${vPill(verdict(ta, tb))}</td>
@@ -1777,7 +1783,7 @@ function drawTrials() {
   }).reverse().join("");
   $("ttSwaps").innerHTML = `<div class="head" style="display:flex;align-items:center">Replacements
       ${nDone ? `<button class="small${UI.ttSettled ? " on" : ""}" style="margin-left:auto" data-act="ttsettled">Settled · ${nDone}</button>` : ""}</div>
-    <table><thead><tr><th class="num">Match</th><th>Race</th><th>Out → In</th><th class="num">Before</th><th class="num">After</th><th class="num" title="Share of teammates' average, so score inflation cancels">Δ adj</th><th>Trainee</th><th class="num">Need</th>
+    <table><thead><tr><th class="num">Match</th><th>Race</th><th>Out → In</th><th class="num">Before</th><th class="num">After</th><th class="num" title="Share of teammates' average, so score inflation cancels. Uses every match before and after the swap; the trainee test and Need use the same.">Δ adj</th><th>Trainee</th><th class="num">Need</th>
       <th class="num">Race Δ</th><th class="num">Team Δ</th><th>Team</th><th class="num">Place</th><th></th></tr></thead><tbody>${sw || `<tr><td colspan="13" class="muted">—</td></tr>`}</tbody></table>`;
   // Match log, newest first.
   $("ttLog").innerHTML = `<div class="head">Matches<span class="vbar">|</span>${R.length}</div>

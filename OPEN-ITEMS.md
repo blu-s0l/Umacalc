@@ -62,19 +62,25 @@ Umamusume: Pretty Derby (Global). One `index.html` in the house style from
     2026-10-21 and replaced by Top % on 2026-10-22: it said nothing about how a runner compares
     with their race-mates.)
   - **Ace pick** (2026-10-22). The ace earns +10% of their own points, so the best ace is the
-    race's highest scorer. Over each runner's last N runs in the race (every role, ignoring the
-    All / Ace / Not ace filter), ace runs are divided back down by Settings → Ace bonus % (default
-    10; 0 if scores are entered before the bonus), so the sitting ace isn't flattered by ~10%.
-    **Top %** = share of those matches where the runner outscored everyone else in the race.
-    **Best ace** tag on the race's highest adjusted average: on a challenger it shows the gap to the
-    current ace ("+6.2%"); on the ace itself, the lead over the runner-up is in its hover. Colour is
-    the confidence: green when Welch's t on inflation-free adjusted scores reaches 2, amber
-    unclear (hover gives matches each still needed, from `needBoth`), grey too early.
-  - **Matches needed respect the window** (2026-10-22; Steve: a 15-race window can't grow past 15).
-    `needBoth` and the Replacements "Need" (`needMore`) return null, shown as "Too close to confirm
-    within N races" / "can't confirm", whenever confirming would take more than N matches in the
-    window. A count only shows while the window is still filling and the gap would be proven by the
-    time it's full.
+    race's highest scorer. Ace runs are divided back down by Settings → Ace bonus % (default 10;
+    0 if scores are entered before the bonus), so the sitting ace isn't flattered by ~10%.
+    **Top %** (current form: last N runs in the race, every role, ignoring the All / Ace / Not ace
+    filter) = share of those matches where the runner outscored everyone else in the race.
+    **Best ace** (head-to-head, all data, 2026-10-22): for each pair of the race's current runners,
+    every match both ran in that race gives one edge, the ratio of their adjusted scores; same match
+    means same opponents and conditions, so match-to-match swings cancel. The tag goes on the
+    runner with the largest summed average edge. On a challenger it shows the edge over the current
+    ace ("+6.2%"); on the ace, the hover gives the lead over the runner-up, with the shared-match
+    count. Colour: green when the paired t reaches 2, amber unclear (hover: shared matches still
+    needed, from `needPaired`, "100+" past 100), grey under 3 shared matches.
+  - **Tests use all data; displays use the last N** (2026-10-22; Steve's call). A trained copy
+    doesn't change, so its old matches count as much as new ones, and the inflation-free and ace
+    adjustments handle drift. So the Replacements trainee test, Δ adj and Need use every match
+    before the swap (outgoing copy, that race) and every match after it up to the next swap; Need
+    is a true countdown again ("100+" past 100). Raw figures that drift with score inflation stay
+    on N either side: Before/After averages, Race Δ, Team Δ and its verdict, Place. The Trainees
+    table (Avg, SD, Top %, trends, Replace rank) stays on the last N as current form. (Briefly on
+    2026-10-22 the estimates were capped at the N-match window instead; replaced by this.)
   - **Replace ranking:** ascending by average − λ·SD, with λ = Settings → Consistency weight,
     default 0.5. A steady low scorer goes first; when averages are close, the erratic one does.
   - **Races table:** race totals per match, plus the team total.

@@ -58,8 +58,18 @@ Umamusume: Pretty Derby (Global). One `index.html` in the house style from
     that match's trainees, or deleted.
   - **Trainee stats:** over a trainee's last N matches in that race (N = Settings → Matches
     averaged, default 15 like the sheet). Shows average, normalized (min to max across the 15),
-    sample SD, CV, high, low, placement (average and mode) and a trend line. Mode (2026-10-21)
-    shows every tied place as "3/4" and stays blank when no place repeats; the Races table has it too.
+    sample SD, CV, high, low, average placement and a trend line. (A placing Mode column was added
+    2026-10-21 and replaced by Top % on 2026-10-22: it said nothing about how a runner compares
+    with their race-mates.)
+  - **Ace pick** (2026-10-22). The ace earns +10% of their own points, so the best ace is the
+    race's highest scorer. Over each runner's last N runs in the race (every role, ignoring the
+    All / Ace / Not ace filter), ace runs are divided back down by Settings → Ace bonus % (default
+    10; 0 if scores are entered before the bonus), so the sitting ace isn't flattered by ~10%.
+    **Top %** = share of those matches where the runner outscored everyone else in the race.
+    **Best ace** tag on the race's highest adjusted average: on a challenger it shows the gap to the
+    current ace ("+6.2%"); on the ace itself, the lead over the runner-up is in its hover. Colour is
+    the confidence: green when Welch's t on inflation-free adjusted scores reaches 2, amber
+    unclear (hover gives matches each still needed, from `needBoth`), grey too early.
   - **Replace ranking:** ascending by average − λ·SD, with λ = Settings → Consistency weight,
     default 0.5. A steady low scorer goes first; when averages are close, the erratic one does.
   - **Races table:** race totals per match, plus the team total.

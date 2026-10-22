@@ -394,11 +394,13 @@ const STYLES = [{n: "Front", i: 6}, {n: "Pace", i: 7}, {n: "Late", i: 8}, {n: "E
 // - ttN / ttRisk: Trials log window (last N matches) and how hard spread counts against a
 //   trainee when ranking who to replace (average − ttRisk × std dev).
 // - ttMA: matches in the trend chart's moving average.
+// - ttAce: the ace bonus % already inside entered scores; taken back out before runners are compared
+//   for the ace role (0 if scores are entered before the bonus).
 // - skN / skG: points per own skill tied to the slot's distance, style or surface (normal / gold or
 //   unique). A trainee with two Mile skills scores a few points more in Mile; about a B at most.
 // - skU: points per 100 Team Trials points a unique activation is worth above a 1★'s (UNIQ_PTS),
 //   counted wherever the unique can fire. Default 1: a 5★ gets +7, a 3★ +5 over a 1★.
-const CFG_DEF = {g: {S: 1.03, A: 1, B: .93, C: .6, D: .3, E: .1, F: .05, G: .02}, fix: .85, pref: 8, grow: .6, base: .25, skN: 1.5, skG: 3, ttN: 15, ttRisk: .5, ttMA: 8, skU: 1,
+const CFG_DEF = {g: {S: 1.03, A: 1, B: .93, C: .6, D: .3, E: .1, F: .05, G: .02}, fix: .85, pref: 8, grow: .6, base: .25, skN: 1.5, skG: 3, ttN: 15, ttRisk: .5, ttMA: 8, skU: 1, ttAce: 10,
                  w: DISTS.map(d => d.w.slice())};
 const cfg = () => root.cfg;
 function cfgNorm(c) {
@@ -406,7 +408,7 @@ function cfgNorm(c) {
   if (!c || typeof c !== "object") return d;
   const num = (v, def) => typeof v === "number" && isFinite(v) && v >= 0 ? v : def;
   for (const g in d.g) d.g[g] = num(c.g && c.g[g], d.g[g]);
-  for (const k of ["fix", "pref", "grow", "base", "skN", "skG", "ttN", "ttRisk", "ttMA", "skU"]) d[k] = num(c[k], d[k]);
+  for (const k of ["fix", "pref", "grow", "base", "skN", "skG", "ttN", "ttRisk", "ttMA", "skU", "ttAce"]) d[k] = num(c[k], d[k]);
   d.w = d.w.map((row, di) => row.map((v, i) => num(c.w && c.w[di] && c.w[di][i], v)));
   return d;
 }
@@ -1541,13 +1543,14 @@ function spark(xs, inv) {
   const y = v => hi === lo ? h / 2 : inv ? 2 + (v - lo) / (hi - lo) * (h - 4) : h - 2 - (v - lo) / (hi - lo) * (h - 4);
   return `<svg class="spark" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}"><polyline fill="none" stroke="var(--gold)" stroke-width="1.5" points="${xs.map((v, i) => `${(i * sx).toFixed(1)},${y(v).toFixed(1)}`).join(" ")}"/></svg>`;
 }
-// Most frequent value(s), ascending, ties included; none when nothing repeats (every value would tie).
-function modes(xs) {
-  const c = {}; xs.forEach(x => { c[x] = (c[x] || 0) + 1; });
-  const top = Math.max(0, ...Object.values(c));
-  return top > 1 || xs.length === 1 ? Object.keys(c).filter(k => c[k] === top).map(Number).sort((a, b) => a - b) : [];
+// Two runners compared over the same stretch: matches each still needs for the gap seen so far, if
+// it holds, to reach |t| = 2 with both samples growing together. null = no gap to confirm.
+function needBoth(a, b) {
+  if (a.length < 2 || b.length < 2) return undefined;
+  const A = stat(a), B = stat(b), d = B.m - A.m;
+  if (!d) return null;
+  return Math.max(0, Math.ceil(4 * (A.sd ** 2 + B.sd ** 2) / d ** 2) - Math.min(a.length, b.length));
 }
-const fModes = xs => xs.join("/");
 // Least-squares slope of a series against its position, per step.
 function slope(xs) {
   const k = xs.length, mx = (k - 1) / 2, m = xs.reduce((a, b) => a + b, 0) / k;
@@ -1640,10 +1643,44 @@ function drawTrials() {
   // Rows with no matches yet always sit at the bottom.
   rows.forEach((r, i) => {
     r.i = i; r.rk = order.indexOf(r) + 1;
-    r.pls = r.es.filter(e => e.pl).map(e => e.pl); r.pmo = modes(r.pls);
+    r.pls = r.es.filter(e => e.pl).map(e => e.pl);
     r.slope = r.s && r.s.m ? slope(r.es.map(e => e.sc)) / r.s.m : 0;
     r.pslope = -slope(r.pls);
   });
+  // Ace pick. The ace earns +10% of their own points, so the best ace is simply the race's highest
+  // scorer. Over each runner's last N runs in the race (every role), ace runs are taken back down
+  // by the Ace bonus % setting so the sitting ace isn't flattered. Top % = share of those matches
+  // where the runner outscored everyone else in the race. The test runs on the same adjusted scores
+  // as a share of teammates' (inflation-free), like the Replacements table.
+  const bonus = 1 + cfg().ttAce / 100, adj = e => e.a ? e.sc / bonus : e.sc;
+  rows.forEach(r => {
+    const v = curV(r.id), runs = [];
+    R.forEach(m => { const e = m.e.find(x => x.id === r.id && x.di === r.di && (x.v || 1) === v); if (e) runs.push([m, e]); });
+    const lastN = runs.slice(-N);
+    r.adj = lastN.map(([, e]) => adj(e));
+    r.adjM = r.adj.length ? r.adj.reduce((a, b) => a + b, 0) / r.adj.length : null;
+    r.arel = lastN.map(([m, e]) => { const o = m.e.filter(x => x !== e); return o.length ? adj(e) / (o.reduce((a, x) => a + adj(x), 0) / o.length) : 1; });
+    const tops = lastN.filter(([m, e]) => m.e.filter(x => x.di === r.di && x !== e).every(x => adj(e) > adj(x))).length;
+    r.topPct = lastN.length ? tops / lastN.length * 100 : null;
+  });
+  DISTS.forEach((d, di) => {
+    const rs = rows.filter(r => r.di === di && r.adjM != null).sort((a, b) => b.adjM - a.adjM);
+    if (!rs.length) return;
+    const best = rs[0], cur = rs.find(r => r.id === L[di][0]), rival = best === cur || !cur ? rs[1] : cur;
+    best.best = rival ? {rival, cur: best === cur, gap: pct(rival.adjM, best.adjM), v: verdict(rival.arel, best.arel), need: needBoth(rival.arel, best.arel)}
+      : {cur: best === cur, v: "Too early"};
+  });
+  const bestTag = r => {
+    const b = r.best;
+    if (!b) return "";
+    const why = b.v === "Better" ? "The gap is clear." : b.v === "Too early" ? "Too few matches to judge yet."
+      : b.need === null ? "No gap to confirm." : b.need ? `About ${b.need} more matches each to confirm.` : "Unclear so far.";
+    const title = !b.rival ? `Highest score in ${DISTS[r.di].n}, ace bonus removed. ${why}`
+      : `${b.gap.toFixed(1)}% ahead of ${UBY[b.rival.id].n}${b.cur ? "" : " (the current ace)"} over the last ${N} runs, ace bonus removed. ${why}`;
+    // "Worse" can only mean the inflation-free test disagrees with the raw averages: still unclear.
+    const cls = b.v === "Better" ? "good" : b.v === "Too early" ? "mute" : "warn";
+    return ` <span class="pill ${cls}" title="${esc(title)}">Best ace${!b.cur && b.rival ? ` +${b.gap.toFixed(1)}%` : ""}</span>`;
+  };
   // How far each average sits below the best in the lineup, and below the best of its own race.
   const raceTop = DISTS.map((d, di) => Math.max(...rows.filter(r => r.s && r.di === di).map(r => r.s.m)));
   rows.forEach(r => { if (r.s) { r.offAll = (r.s.m / hi - 1) * 100; r.offRace = (r.s.m / raceTop[r.di] - 1) * 100; } });
@@ -1651,7 +1688,7 @@ function drawTrials() {
   // the trainees within each race. Trainees with no matches yet always sit at the bottom.
   const kv = {race: r => r.di, name: r => UBY[r.id].n + UBY[r.id].t, runs: r => r.s.n, avg: r => r.s.m, norm: r => r.s.m,
               top: r => r.offAll, rtop: r => r.offRace,
-              sd: r => r.s.sd, cv: r => r.s.cv, hi: r => r.s.hi, lo: r => r.s.lo, place: r => r.p ? r.p.m : Infinity, pmode: r => r.pmo.length ? r.pmo[0] : Infinity, trend: r => r.slope, ptrend: r => r.pslope, rank: r => r.rk};
+              sd: r => r.s.sd, cv: r => r.s.cv, hi: r => r.s.hi, lo: r => r.s.lo, place: r => r.p ? r.p.m : Infinity, toppct: r => r.topPct == null ? -1 : r.topPct, trend: r => r.slope, ptrend: r => r.pslope, rank: r => r.rk};
   const shown = sortBy(rows.slice(), [["_none", 1], ...UI.ttSort], (r, k) => k === "_none" ? !r.s : r.s || k === "race" || k === "name" ? kv[k](r) : 0);
   // Column titles explain themselves in a bubble on hover.
   const TIP = {
@@ -1667,7 +1704,7 @@ function drawTrials() {
     hi: "Best single score over those matches.",
     lo: "Worst single score over those matches.",
     place: "Average finishing place (1 = first).",
-    pmode: "Most common finishing place. Ties show every tied place; blank when no place repeats.",
+    toppct: "Share of this runner's last N races (every role) where they outscored everyone else in the race, after taking the ace bonus back out. Ignores All / Ace / Not ace. The highest average in each race is tagged Best ace; hover the tag for the gap and how sure it is.",
     trend: "Scores over those matches, oldest to newest. Sorts by the fitted slope, as % of the average per match. Click a line for the full chart.",
     ptrend: "Placings over those matches, oldest to newest, 1st at the top. Sorts by places gained per match, from the fitted slope. Click a line for the full chart.",
     rank: "Replace order: 1 is the first to swap out. Ranked by average − Consistency weight × SD.",
@@ -1678,25 +1715,25 @@ function drawTrials() {
   $("ttUmas").innerHTML = `<div class="head" style="display:flex;align-items:center">Trainees<span class="vbar">|</span>Last ${N}
       <span class="row" style="margin-left:auto;gap:6px">${ROLES.map(([k, l]) => `<button class="small${UI.ttRole === k ? " on" : ""}" data-act="ttrole" data-r="${k}">${l}</button>`).join("")}</span></div>
     <table><thead><tr>${tth("race", "Race")}${tth("name", "Trainee")}${tth("runs", "Runs", "num")}${tth("avg", "Avg", "num")}${tth("norm", "Norm", "num")}${tth("top", "vs Top", "num")}${tth("rtop", "vs Race", "num")}${tth("sd", "SD", "num")}${tth("cv", "CV", "num")}
-      ${tth("hi", "High", "num")}${tth("lo", "Low", "num")}${tth("trend", "Trend")}${tth("place", "Place", "num")}${tth("pmode", "Mode", "num")}${tth("ptrend", "Place trend")}${tth("rank", "Replace", "num")}</tr></thead><tbody>
+      ${tth("hi", "High", "num")}${tth("lo", "Low", "num")}${tth("trend", "Trend")}${tth("place", "Place", "num")}${tth("toppct", "Top %", "num")}${tth("ptrend", "Place trend")}${tth("rank", "Replace", "num")}</tr></thead><tbody>
     ${shown.map(r => { const rk = r.rk, nm = r.s && hi > lo ? (r.s.m - lo) / (hi - lo) * 100 : null;
-      return `<tr><td>${DISTS[r.di].n}</td><td>${uName(UBY[r.id])}${L[r.di][0] === r.id ? ` <span class="ace">Ace</span>` : ""}</td><td class="num">${r.s ? r.s.n : ""}</td>
+      return `<tr><td>${DISTS[r.di].n}</td><td>${uName(UBY[r.id])}${L[r.di][0] === r.id ? ` <span class="ace">Ace</span>` : ""}${bestTag(r)}</td><td class="num">${r.s ? r.s.n : ""}</td>
         <td class="num gold">${r.s ? n(r.s.m) : ""}</td><td class="num">${nm == null ? "" : nm.toFixed(1) + "%"}</td>
         <td class="num">${off(r.offAll)}</td><td class="num">${off(r.offRace)}</td>
         <td class="num">${r.s && r.s.n > 1 ? n(r.s.sd) : ""}</td><td class="num">${r.s && r.s.n > 1 ? (r.s.cv * 100).toFixed(0) + "%" : ""}</td>
         <td class="num">${r.s ? n(r.s.hi) : ""}</td><td class="num">${r.s ? n(r.s.lo) : ""}</td>
-        <td>${sparkBtn(r, "sc", spark(r.es.map(e => e.sc)))}</td><td class="num">${r.p ? r.p.m.toFixed(2) : ""}</td><td class="num">${fModes(r.pmo)}</td>
+        <td>${sparkBtn(r, "sc", spark(r.es.map(e => e.sc)))}</td><td class="num">${r.p ? r.p.m.toFixed(2) : ""}</td><td class="num">${r.topPct == null ? "" : r.topPct.toFixed(0) + "%"}</td>
         <td>${sparkBtn(r, "pl", spark(r.pls, true))}</td><td class="num${rk === 1 ? " gold" : ""}">${rk || ""}</td></tr>`; }).join("") || `<tr><td colspan="16" class="muted">—</td></tr>`}</tbody></table>`;
   // Races and team, per match, over the last N matches.
   const last = R.slice(-N);
   const rs = DISTS.map((d, di) => ({d, s: stat(last.filter(r => r.e.some(e => e.di === di)).map(r => raceTotal(r, di))),
-    pl: last.flatMap(r => r.e.filter(e => e.di === di && e.pl).map(e => e.pl))})).map(x => ({...x, p: stat(x.pl), pmo: modes(x.pl)}));
+    p: stat(last.flatMap(r => r.e.filter(e => e.di === di && e.pl).map(e => e.pl)))}));
   const rm = rs.filter(x => x.s).map(x => x.s.m), rlo = Math.min(...rm), rhi = Math.max(...rm), ts = stat(last.map(teamTotal));
   $("ttRaces").innerHTML = `<div class="head">Races<span class="vbar">|</span>Last ${N}</div>
-    <table><thead><tr><th>Race</th><th class="num">Avg</th><th class="num">Norm</th><th class="num">SD</th><th class="num">High</th><th class="num">Low</th><th class="num">Place</th><th class="num">Mode</th></tr></thead><tbody>
+    <table><thead><tr><th>Race</th><th class="num">Avg</th><th class="num">Norm</th><th class="num">SD</th><th class="num">High</th><th class="num">Low</th><th class="num">Place</th></tr></thead><tbody>
     ${rs.map(x => `<tr><td>${x.d.n}</td><td class="num gold">${x.s ? n(x.s.m) : ""}</td><td class="num">${x.s && rhi > rlo ? ((x.s.m - rlo) / (rhi - rlo) * 100).toFixed(1) + "%" : ""}</td>
-      <td class="num">${x.s && x.s.n > 1 ? n(x.s.sd) : ""}</td><td class="num">${x.s ? n(x.s.hi) : ""}</td><td class="num">${x.s ? n(x.s.lo) : ""}</td><td class="num">${x.p ? x.p.m.toFixed(2) : ""}</td><td class="num">${fModes(x.pmo)}</td></tr>`).join("")}
-    ${ts ? `<tr class="tot"><td>Team</td><td class="num gold">${n(ts.m)}</td><td></td><td class="num">${ts.n > 1 ? n(ts.sd) : ""}</td><td class="num">${n(ts.hi)}</td><td class="num">${n(ts.lo)}</td><td></td><td></td></tr>` : ""}</tbody></table>`;
+      <td class="num">${x.s && x.s.n > 1 ? n(x.s.sd) : ""}</td><td class="num">${x.s ? n(x.s.hi) : ""}</td><td class="num">${x.s ? n(x.s.lo) : ""}</td><td class="num">${x.p ? x.p.m.toFixed(2) : ""}</td></tr>`).join("")}
+    ${ts ? `<tr class="tot"><td>Team</td><td class="num gold">${n(ts.m)}</td><td></td><td class="num">${ts.n > 1 ? n(ts.sd) : ""}</td><td class="num">${n(ts.hi)}</td><td class="num">${n(ts.lo)}</td><td></td></tr>` : ""}</tbody></table>`;
   // Replacements: the replaced trainee's last N matches in that race against the newcomer's
   // matches since, and the same windows for the race total and the whole team (placement bonuses
   // mean a swap can lift or sink teammates too).
@@ -1794,6 +1831,7 @@ VIEWS.settings = () => {
     ttN: "How many recent matches every Trials figure uses: averages, spread, the replace ranking and replacement reviews.",
     ttRisk: "The replace order sorts by average − this × std dev. 0 ranks by average alone; higher values favour steadier trainees.",
     ttMA: "Matches in the moving average on the trend charts. Until a trainee has that many, each point averages every match so far.",
+    ttAce: "The ace's bonus already included in the scores you enter (GameTora: +10% of the ace's points). Top % and Best ace take it back out so the ace isn't flattered. Set 0 if you enter scores before the bonus.",
   };
   view.innerHTML = `<div class="card"><div class="head">Team building</div>
     <div class="fields sfields">
@@ -1817,6 +1855,7 @@ VIEWS.settings = () => {
       <div><label>Matches averaged${tip(T.ttN)}</label>${num("ttN", c.ttN, "1")}</div>
       <div><label>Consistency weight${tip(T.ttRisk)}</label>${num("ttRisk", c.ttRisk)}</div>
       <div><label>Moving average${tip(T.ttMA)}</label>${num("ttMA", c.ttMA, "1")}</div>
+      <div><label>Ace bonus %${tip(T.ttAce)}</label>${num("ttAce", c.ttAce, "1")}</div>
     </div>
     <div class="row" style="margin-top:14px"><button class="small danger" data-act="reset">Delete all data</button></div></div>`;
 };
@@ -1859,7 +1898,7 @@ function onClick(e) {
     // Same column again flips it; a new column becomes the main sort and the old ones stay behind it.
     const cur = UI[st];
     UI[st] = cur[0][0] === k ? [[k, -cur[0][1]], ...cur.slice(1)]
-      : [[k, ["name", "type", "race", "place", "pmode", "rank"].includes(k) ? 1 : -1], ...cur.filter(x => x[0] !== k)].slice(0, SORT_DEPTH);
+      : [[k, ["name", "type", "race", "place", "rank"].includes(k) ? 1 : -1], ...cur.filter(x => x[0] !== k)].slice(0, SORT_DEPTH);
     ({t: drawTrainees, s: drawSupports, tt: drawTrials})[th.dataset.tab]();
     return;
   }

@@ -1287,7 +1287,7 @@ function plannerFilter() {
   modal(`<div class="mtitle">Filter</div><div class="msub">Trainees shown in Planner</div>
     ${sec("own", "Owned", ownedUmas().sort(byName))}<hr class="rule">${sec("tgt", "Target", planTargets().sort(byName))}`);
 }
-// A collapsible planner section; open unless the user closed it (root.plan.open).
+// A collapsible section (Planner's, and Trials' Matches log); open unless the user closed it (root.plan.open).
 const sect = (key, head, body) =>
   `<details class="sect" data-sec="${key}"${root.plan.open[key] === false ? "" : " open"}><summary class="head">${head}</summary>${body}</details>`;
 // Owned trainee's innate and potential skills with editable hint levels. A potential
@@ -1786,12 +1786,13 @@ function drawTrials() {
     <table><thead><tr><th class="num">Match</th><th>Race</th><th>Out → In</th><th class="num">Before</th><th class="num">After</th><th class="num" title="Share of teammates' average, so score inflation cancels. Uses every match before and after the swap; the trainee test and Need use the same.">Δ adj</th><th>Trainee</th><th class="num">Need</th>
       <th class="num">Race Δ</th><th class="num">Team Δ</th><th>Team</th><th class="num">Place</th><th></th></tr></thead><tbody>${sw || `<tr><td colspan="13" class="muted">—</td></tr>`}</tbody></table>`;
   // Match log, newest first.
-  $("ttLog").innerHTML = `<div class="head">Matches<span class="vbar">|</span>${R.length}</div>
+  // Collapsible like the Planner's sections (state kept in root.plan.open under "ttLog").
+  $("ttLog").innerHTML = sect("ttLog", `Matches<span class="vbar">|</span>${R.length}`, `
     <table><thead><tr><th class="num">#</th><th>Date</th><th class="num">Team</th>${DISTS.map(d => `<th class="num">${d.n}</th>`).join("")}<th></th></tr></thead><tbody>
     ${R.map((r, i) => `<tr${UI.ttEdit === i ? ' class="sorted"' : ""}><td class="num">${i + 1}</td><td class="mono">${r.t ? new Date(r.t).toISOString().slice(0, 10) : ""}</td>
       <td class="num gold">${n(teamTotal(r))}</td>${DISTS.map((d, di) => { const was = i && aceOf(R[i - 1], di), now = aceOf(r, di);
         return `<td class="num">${was && now && was !== now ? `<span class="ace" style="margin:0 6px 0 0" title="Ace: ${esc(UBY[was].n)} → ${esc(UBY[now].n)}">A</span>` : ""}${n(raceTotal(r, di))}</td>`; }).join("")}
-      <td><button class="small" data-act="ttedit" data-i="${i}">Edit</button> <button class="x" data-act="ttdel" data-i="${i}">×</button></td></tr>`).reverse().join("") || `<tr><td colspan="9" class="muted">—</td></tr>`}</tbody></table>`;
+      <td><button class="small" data-act="ttedit" data-i="${i}">Edit</button> <button class="x" data-act="ttdel" data-i="${i}">×</button></td></tr>`).reverse().join("") || `<tr><td colspan="9" class="muted">—</td></tr>`}</tbody></table>`);
 }
 // Entry form: 15 rows of score + placement. A new match takes the current lineup; editing an old
 // one keeps that match's own trainees.

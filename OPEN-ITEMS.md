@@ -84,6 +84,8 @@ Umamusume: Pretty Derby (Global). One `index.html` in the house style from
   - **Replace ranking:** ascending by average − λ·SD, with λ = Settings → Consistency weight,
     default 0.5. A steady low scorer goes first; when averages are close, the erratic one does.
   - **Races table:** race totals per match, plus the team total.
+  - **Matches log** collapses (2026-10-22), like the Planner's sections; the open/closed state is
+    remembered in `root.plan.open.ttLog`.
   - **Replacements:** for each swap, the replaced trainee's last N matches in that race against
     the newcomer's matches since, plus the same windows for the race total and the team total.
     Each window is bounded by that race's previous and next swaps. Verdict is Welch's t:

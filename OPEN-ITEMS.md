@@ -70,6 +70,11 @@ Umamusume: Pretty Derby (Global). One `index.html` in the house style from
     current ace ("+6.2%"); on the ace itself, the lead over the runner-up is in its hover. Colour is
     the confidence: green when Welch's t on inflation-free adjusted scores reaches 2, amber
     unclear (hover gives matches each still needed, from `needBoth`), grey too early.
+  - **Matches needed respect the window** (2026-10-22; Steve: a 15-race window can't grow past 15).
+    `needBoth` and the Replacements "Need" (`needMore`) return null, shown as "Too close to confirm
+    within N races" / "can't confirm", whenever confirming would take more than N matches in the
+    window. A count only shows while the window is still filling and the gap would be proven by the
+    time it's full.
   - **Replace ranking:** ascending by average − λ·SD, with λ = Settings → Consistency weight,
     default 0.5. A steady low scorer goes first; when averages are close, the erratic one does.
   - **Races table:** race totals per match, plus the team total.

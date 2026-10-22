@@ -1523,14 +1523,16 @@ function verdict(a, b) {
   return t >= 2 ? "Better" : t <= -2 ? "Worse" : "Unclear";
 }
 // Matches still needed after a swap for the gap seen so far, if it holds, to reach |t| = 2.
-// Uses the same spread as the samples; null = the gap is too small to confirm against this many
-// "before" matches, however long you wait.
-function needMore(a, b) {
+// Uses the same spread as the samples. The "after" window stops at cap matches (Matches averaged),
+// so null = the gap is too small to confirm within it: against this many "before" matches, or
+// before the window is full.
+function needMore(a, b, cap) {
   if (a.length < 2 || !b.length) return undefined;
   const A = stat(a), B = stat(b), sb = b.length > 1 ? B.sd : A.sd;
   const room = ((B.m - A.m) / 2) ** 2 - A.sd ** 2 / A.n;
   if (room <= 0) return null;
-  return Math.max(0, Math.ceil(sb ** 2 / room) - b.length);
+  const need = Math.max(0, Math.ceil(sb ** 2 / room) - b.length);
+  return b.length + need > cap ? null : need;
 }
 const pct = (a, b) => a ? (b / a - 1) * 100 : 0;
 const fPct = v => `<span class="${v > 0 ? "pos" : v < 0 ? "neg" : ""}">${v > 0 ? "+" : ""}${v.toFixed(1)}%</span>`;
@@ -1543,13 +1545,16 @@ function spark(xs, inv) {
   const y = v => hi === lo ? h / 2 : inv ? 2 + (v - lo) / (hi - lo) * (h - 4) : h - 2 - (v - lo) / (hi - lo) * (h - 4);
   return `<svg class="spark" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}"><polyline fill="none" stroke="var(--gold)" stroke-width="1.5" points="${xs.map((v, i) => `${(i * sx).toFixed(1)},${y(v).toFixed(1)}`).join(" ")}"/></svg>`;
 }
-// Two runners compared over the same stretch: matches each still needs for the gap seen so far, if
-// it holds, to reach |t| = 2 with both samples growing together. null = no gap to confirm.
-function needBoth(a, b) {
+// Two runners compared over the same trailing window: matches each still needs for the gap seen so
+// far, if it holds, to reach |t| = 2 as their samples grow together. The window holds at most cap
+// matches (Matches averaged), and once full a new match only pushes an old one out, so null = the
+// gap is too small to confirm within that many matches, however long you wait.
+function needBoth(a, b, cap) {
   if (a.length < 2 || b.length < 2) return undefined;
   const A = stat(a), B = stat(b), d = B.m - A.m;
   if (!d) return null;
-  return Math.max(0, Math.ceil(4 * (A.sd ** 2 + B.sd ** 2) / d ** 2) - Math.min(a.length, b.length));
+  const n = Math.ceil(4 * (A.sd ** 2 + B.sd ** 2) / d ** 2);
+  return n > cap ? null : Math.max(0, n - Math.min(a.length, b.length));
 }
 // Least-squares slope of a series against its position, per step.
 function slope(xs) {
@@ -1667,14 +1672,14 @@ function drawTrials() {
     const rs = rows.filter(r => r.di === di && r.adjM != null).sort((a, b) => b.adjM - a.adjM);
     if (!rs.length) return;
     const best = rs[0], cur = rs.find(r => r.id === L[di][0]), rival = best === cur || !cur ? rs[1] : cur;
-    best.best = rival ? {rival, cur: best === cur, gap: pct(rival.adjM, best.adjM), v: verdict(rival.arel, best.arel), need: needBoth(rival.arel, best.arel)}
+    best.best = rival ? {rival, cur: best === cur, gap: pct(rival.adjM, best.adjM), v: verdict(rival.arel, best.arel), need: needBoth(rival.arel, best.arel, N)}
       : {cur: best === cur, v: "Too early"};
   });
   const bestTag = r => {
     const b = r.best;
     if (!b) return "";
     const why = b.v === "Better" ? "The gap is clear." : b.v === "Too early" ? "Too few matches to judge yet."
-      : b.need === null ? "No gap to confirm." : b.need ? `About ${b.need} more matches each to confirm.` : "Unclear so far.";
+      : b.need === null ? `Too close to confirm within ${N} races.` : b.need ? `About ${b.need} more matches each to confirm.` : "Unclear so far.";
     const title = !b.rival ? `Highest score in ${DISTS[r.di].n}, ace bonus removed. ${why}`
       : `${b.gap.toFixed(1)}% ahead of ${UBY[b.rival.id].n}${b.cur ? "" : " (the current ace)"} over the last ${N} runs, ace bonus removed. ${why}`;
     // "Worse" can only mean the inflation-free test disagrees with the raw averages: still unclear.
@@ -1756,7 +1761,7 @@ function drawTrials() {
     const a = ttOf(before, c.out, c.di, c.ov), b = ttOf(after, c.in, c.di, c.nv);
     // The test runs on inflation-free relative scores; Before/After show the raw averages.
     const ar = relOf(before, c.out, c.di, c.ov), br = relOf(after, c.in, c.di, c.nv);
-    const v = verdict(ar, br), need = needMore(ar, br);
+    const v = verdict(ar, br), need = needMore(ar, br, N);
     const needTxt = v === "Better" || v === "Worse" || need === undefined ? "" : need === null ? "can't confirm" : need ? `~${need}` : "";
     const ra = before.map(r => raceTotal(r, c.di)), rb = after.map(r => raceTotal(r, c.di));
     const ta = before.map(teamTotal), tb = after.map(teamTotal);

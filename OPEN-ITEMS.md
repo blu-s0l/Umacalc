@@ -23,6 +23,11 @@ Umamusume: Pretty Derby (Global). One `index.html` in the house style from
 
 ## Decided
 
+- **Owning beats the release date** (2026-11-14; Steve: GameTora's Global dates can lag, which
+  locked new trainees out of his roster). `avail()` is true for anything owned, whatever its
+  `release_en`. JP-only trainees can be given stars on Trainees; JP-only cards are listed under
+  Supports → Show → JP only and can be given an LB. Once owned, an item counts as Global everywhere
+  (team builder, Trials, Planner, Inventory) and loses its "JP · est" tag.
 - **No ace bonus in the team builder** (2026-10-22). GameTora: the ace (position 1) gets +10% on
   all the points she earns, additive with the other modifiers. Steve's call: the builder doesn't
   score the ace role, because whoever is ace earns that bonus anyway; it just makes the trainee

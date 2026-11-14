@@ -493,8 +493,12 @@ const UI = {tq: "", tShow: [], tShowAll: false, tSort: [["name", 1]], ttSort: [[
             sq: "", sType: "", sRar: "", sOwn: "all", sSort: [["score", -1]],
             team: null, teamIdx: 0, hq: ""};
 
-const avail = x => root.set.jp || (!!x.en && x.en <= TODAY);
-// Out in JP but not yet on Global: listed on Trainees so it can be targeted, never owned.
+// On Global: released there by GameTora's date, or owned. Owning one proves it's out, so a late or
+// missing Global date in the data never locks a trainee or card out of the roster.
+const owns = x => !!(x.ty != null ? root.sups[x.id] : root.umas[x.id]);
+const avail = x => root.set.jp || owns(x) || (!!x.en && x.en <= TODAY);
+// Out in JP but not yet on Global (by the data): listed so it can be targeted or, if the data is
+// behind, owned; once owned it counts as Global.
 const jpOnly = x => !avail(x) && !!x.jp && x.jp <= TODAY;
 
 // Global release estimate. Global works through JP's back catalogue faster than JP
@@ -560,7 +564,7 @@ function supScore(s, lv) {
 const own = s => root.sups[s.id];
 const curLv = s => { const o = own(s); return o ? Math.min(o.lv || maxLv(s, o.lb), maxLv(s, o.lb)) : maxLv(s, 4); };
 function ownedSups() { return Object.keys(root.sups).map(id => SBY[id]).filter(s => s && avail(s)); }
-const sName = s => `<a class="nm" data-act="sinfo" data-id="${s.id}">${esc(s.n)}</a><div class="ttl">${esc(s.t)}</div>`;
+const sName = s => `<a class="nm" data-act="sinfo" data-id="${s.id}">${esc(s.n)}</a><div class="ttl">${esc(s.t)}</div>${jpOnly(s) ? `<div class="jpt">JP · est ${estGlobal(s.jp)}</div>` : ""}`;
 const sLabel = (s, lb) => `${s.n} ${RAR[s.r]}` + (lb != null ? ` LB${lb}` : "") + ` · ${s.t}`;
 const statPlus = o => (o[3] || 0) + (o[4] || 0) + (o[5] || 0) + (o[6] || 0) + (o[7] || 0) + (o[41] || 0) * 5;
 const skName = id => (D.skills[id] || ["#" + id])[0];
@@ -690,7 +694,7 @@ function drawTrainees() {
     const starOpts = [["0", "—"]];
     for (let i = u.r; i <= 5; i++) starOpts.push([i, i + "★"]);
     return `<tr class="${o ? "" : "off"}"><td>${uName(u)}</td>
-      <td><select class="mini" data-act="ustar" data-id="${u.id}"${jpOnly(u) ? " disabled" : ""}>${opts(starOpts, star)}</select></td>
+      <td><select class="mini" data-act="ustar" data-id="${u.id}">${opts(starOpts, star)}</select></td>
       <td><select class="mini" data-act="upot" data-id="${u.id}"${o ? "" : " disabled"}>${opts([1,2,3,4,5].map(i => [i, "P" + i]), o ? o.p : 1)}</select></td>
       <td class="ctr">${o ? "" : `<button class="tgl${root.tgt[u.id] ? " on" : ""}" data-act="utgt" data-id="${u.id}" title="Target"></button>`}</td>
       ${st.map(v => `<td class="num">${v}</td>`).join("")}
@@ -750,7 +754,7 @@ VIEWS.supports = () => {
     <div><label>Search</label><input id="sq" value="${esc(UI.sq)}" placeholder="Name, title or skill"></div>
     <div><label>Type</label><select id="sType">${opts([["", "All"], ...TYPES], UI.sType)}</select></div>
     <div><label>Rarity</label><select id="sRar">${opts([["", "All"], ["3", "SSR"], ["2", "SR"], ["1", "R"]], UI.sRar)}</select></div>
-    <div><label>Show</label><select id="sOwn">${opts([["all","All"],["own","Owned"],["not","Not owned"]], UI.sOwn)}</select></div>
+    <div><label>Show</label><select id="sOwn">${opts([["all","All"],["own","Owned"],["not","Not owned"],["jp","JP only"]], UI.sOwn)}</select></div>
   </div><div class="hint" id="sCount"></div></div>
   <div class="card scroll" id="sTable"></div>`;
   drawSupports();
@@ -758,9 +762,11 @@ VIEWS.supports = () => {
 function drawSupports() {
   const q = UI.sq.trim().toLowerCase();
   const hit = s => !q || (s.n + " " + s.t).toLowerCase().includes(q) || s.h.concat(s.e).some(id => skName(id).toLowerCase().includes(q));
-  const list = SUPS.filter(s => avail(s) && hit(s)
+  // JP-only cards (out in JP, no Global date yet) only under Show → JP only, so they don't crowd
+  // the list; owning one moves it to the normal list.
+  const list = SUPS.filter(s => (UI.sOwn === "jp" ? jpOnly(s) : avail(s)) && hit(s)
     && (!UI.sType || s.ty === UI.sType) && (!UI.sRar || s.r === +UI.sRar)
-    && (UI.sOwn === "all" || (UI.sOwn === "own") === !!own(s)))
+    && (UI.sOwn === "all" || UI.sOwn === "jp" || (UI.sOwn === "own") === !!own(s)))
     .map(s => { const lv = curLv(s), e = supEff(s, lv); return {s, lv, o: e.o, cond: e.cond, sc: supScore(s, lv)}; });
   sortBy(list, UI.sSort, (r, k) => k === "name" ? r.s.n + r.s.t : k === "score" ? r.sc : k === "lb" ? (own(r.s) ? own(r.s).lb : -1)
     : k === "type" ? TYPES.findIndex(t => t[0] === r.s.ty) * 10 - r.s.r : k === "stat" ? statPlus(r.o) : (r.o[k] || 0));

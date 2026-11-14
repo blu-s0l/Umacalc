@@ -22,7 +22,7 @@
 html,body{margin:0;padding:0}
 body{background:var(--bg);color:var(--tx);font-family:var(--sans);font-size:14px;line-height:1.5;
      -webkit-font-smoothing:antialiased}
-.wrap{max-width:1280px;margin:0 auto;padding:22px 18px 80px}
+.wrap{max-width:1340px;margin:0 auto;padding:0 18px 80px}
 a{color:var(--blue)}
 h1,h2,h3{margin:0;font-weight:600;letter-spacing:-.01em}
 
@@ -79,7 +79,7 @@ button.x{padding:1px 7px;font-size:12px;color:var(--mut)}
 table{width:100%;border-collapse:collapse;font-size:12.5px}
 th{text-align:left;font-size:9.5px;font-weight:700;color:var(--mut);text-transform:uppercase;letter-spacing:.08em;
    padding:6px 8px;border-bottom:1px solid var(--line2);white-space:nowrap}
-td{padding:5px 8px;border-bottom:1px solid var(--line);vertical-align:middle}
+td{padding:6px 8px;border-bottom:1px solid var(--line);vertical-align:middle}
 td.num,th.num{text-align:right;font-family:var(--mono)}
 th[data-sort]{cursor:pointer}
 th[data-sort]:hover{color:var(--blue)}
@@ -97,18 +97,25 @@ tr.sorted td{background:var(--bluebg)}
 .vbar{color:var(--gold);font-weight:700;padding:0 6px}
 
 /* --- app --- */
-.top{display:flex;align-items:center;gap:18px;flex-wrap:wrap;margin-bottom:16px}
-.brand{font-size:22px;font-weight:700;letter-spacing:-.02em}
-.brand span{color:var(--gold)}
+/* pinned masthead and section tabs, as in RCalculator v2: tabs are an underline, not a filled pill */
+.topbar{position:sticky;top:0;z-index:20;background:var(--bg);padding:14px 0 0;border-bottom:1px solid var(--line);margin-bottom:14px}
+.mast{display:flex;align-items:flex-end;gap:16px;flex-wrap:wrap}
+.mast .logo{font-family:var(--mono);font-size:26px;font-weight:700;letter-spacing:-.03em;line-height:1}
+.sectabs{display:flex;gap:2px;flex-wrap:wrap;align-items:flex-end;margin-top:10px}
+.sectabs a{color:var(--mut);text-decoration:none;font-size:13px;font-weight:600;padding:7px 12px;border-bottom:2px solid transparent}
+.sectabs a:hover{color:var(--tx)}
+.sectabs a.on{color:var(--blue);border-bottom-color:var(--blue)}
+.sectabs a.end{margin-left:auto}
+/* on a phone the tabs stay one row that scrolls sideways, so the pinned header stays short */
+@media(max-width:660px){.sectabs{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none}
+  .sectabs::-webkit-scrollbar{display:none}.sectabs a{flex:none;padding:7px 10px}}
 .totop{position:fixed;right:22px;bottom:22px;z-index:40;width:42px;height:42px;padding:0;border-radius:50%;
        display:flex;align-items:center;justify-content:center;color:var(--blue);background:var(--panel2);
        border:1px solid rgba(77,159,255,.45);box-shadow:0 6px 18px rgba(0,0,0,.45);
        opacity:0;pointer-events:none;transform:translateY(8px);transition:opacity .2s,transform .2s}
 .totop.on{opacity:1;pointer-events:auto;transform:none}
 .totop:hover{background:var(--bluebg);border-color:var(--blue);color:var(--blue)}
-.brand .beta{font-style:normal;font-size:12px;font-weight:600;color:var(--amber);letter-spacing:.04em;vertical-align:middle}
-nav{display:flex;gap:4px;flex-wrap:wrap;flex:1}
-nav a.end{margin-left:auto}
+.logo .beta{font-family:var(--sans);font-style:normal;font-size:12px;font-weight:600;color:var(--amber);letter-spacing:.04em;vertical-align:middle}
 .tt .nm{font-size:14px}
 .grow{display:inline-flex;gap:6px;white-space:nowrap}
 .grow>span{display:inline-flex;gap:3px;min-width:34px}
@@ -147,9 +154,6 @@ table.cmp .gs{padding-left:16px}
 table.pot th.pl{text-align:center;border-bottom:1px solid var(--line)}
 table.pot td:nth-child(even),table.pot th.pl,table.pot tr:last-child th:nth-child(odd){padding-left:16px}
 label.ck{display:inline-flex;align-items:center;text-transform:none;letter-spacing:0;font-size:12.5px;font-weight:500;color:var(--tx);margin:0;cursor:pointer}
-nav a{padding:6px 12px;border-radius:8px;color:var(--sub);text-decoration:none;font-size:13px;font-weight:600;border:1px solid transparent}
-nav a:hover{color:var(--tx);border-color:var(--line2)}
-nav a.on{color:var(--blue);background:var(--bluebg);border-color:rgba(77,159,255,.3)}
 select.mini,input.mini{width:auto;padding:3px 6px;font-size:12px;border-radius:6px}
 input.mini{width:62px}
 .nm{color:var(--tx);cursor:pointer;font-weight:600;text-decoration:none}
@@ -302,14 +306,22 @@ tr.tot td{font-weight:700;border-top:1px solid var(--line2)}
 @media(max-width:900px){.split3{grid-template-columns:1fr}}
 footer{margin-top:24px}
 @media(max-width:900px){.slots{grid-template-columns:repeat(3,minmax(0,1fr))}}
-@media(max-width:660px){.split{grid-template-columns:1fr}.wrap{padding:16px 12px 60px}.slots{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:660px){.split{grid-template-columns:1fr}.wrap{padding:0 12px 60px}.slots{grid-template-columns:repeat(2,minmax(0,1fr))}}
+/* squared corners, as in RCalculator v2: panels and the bubbles that float over them are square;
+   the things you press or read a state off (buttons, inputs, pills, toggles) stay round. Declared
+   last so a radius cannot drift back in from an earlier rule. */
+.card,.metric,.calbox,.modalcard,.banner,.slot,.scroll,.mpic,.fpop,
+.tip::after,th.hastip::after,button.acet[data-tip]::after{border-radius:0}
+/* the "i" helper: a quiet grey ring that turns blue on hover */
+.tip{border-color:var(--line2);color:var(--mut)}
+.tip:hover,.tip:focus{border-color:var(--blue);color:var(--blue);background:none}
 </style>
 </head>
 <body>
 <div class="wrap">
-  <header class="top">
-    <div class="brand">Uma<span>calc</span> <em class="beta">(BETA)</em></div>
-    <nav id="nav"></nav>
+  <header class="topbar" id="topbar">
+    <div class="mast"><div class="logo" role="heading" aria-level="1">Uma<span class="gold">calc</span> <em class="beta">(BETA)</em></div></div>
+    <nav class="sectabs" id="nav" aria-label="Sections"></nav>
   </header>
   <div id="banner"></div>
   <main id="view"></main>
@@ -607,6 +619,9 @@ function go() {
   const h = location.hash.slice(1);
   tab = TABS.some(t => t[0] === h) ? h : "trainees";
   $("nav").innerHTML = TABS.map(([k, n]) => `<a href="#${k}" class="${k === tab ? "on" : ""}${k === "settings" ? " end" : ""}">${n}</a>`).join("");
+  // phone width: the tab row scrolls sideways, so bring the open tab into view
+  const nav = $("nav"), on = nav.querySelector(".on");
+  if (on && nav.scrollWidth > nav.clientWidth) nav.scrollLeft = on.offsetLeft - (nav.clientWidth - on.offsetWidth) / 2;
   show();
 }
 function drawBanner() {
@@ -2159,6 +2174,9 @@ const totop = $("totop");
 const syncTop = () => totop.classList.toggle("on", window.scrollY > window.innerHeight * .6);
 window.addEventListener("scroll", syncTop, {passive: true});
 totop.addEventListener("click", () => window.scrollTo({top: 0, behavior: "smooth"}));
+// The header is pinned, so anything scrolled into view stops below it (its height changes as tabs wrap).
+const syncPad = () => { document.documentElement.style.scrollPaddingTop = $("topbar").offsetHeight + 8 + "px"; };
+new ResizeObserver(syncPad).observe($("topbar"));
 
 $("foot").innerHTML = `Umacalc ${VERSION}<span class="vbar">|</span>Data and images ${esc(D.built)} from <a href="https://gametora.com/umamusume" target="_blank" rel="noopener">GameTora</a><span class="vbar">|</span>Umamusume: Pretty Derby © Cygames, Inc. Unofficial fan tool.`;
 drawBanner();

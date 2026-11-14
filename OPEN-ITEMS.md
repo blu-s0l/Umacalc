@@ -23,6 +23,11 @@ Umamusume: Pretty Derby (Global). One `index.html` in the house style from
 
 ## Decided
 
+- **Looks like RCalculator v2** (2026-11-14; Steve asked to match Calc v2's style). Panels, the
+  modal, banners, slots and hover bubbles are square; buttons, inputs, pills and toggles stay
+  round (one rule, last in the sheet). The masthead and tabs are a pinned top bar with underline
+  tabs; under 660px the tab row scrolls sideways so the bar stays one row. The "i" helpers are a
+  grey ring that turns blue on hover. Scroll padding follows the bar's height.
 - **Owning beats the release date** (2026-11-14; Steve: GameTora's Global dates can lag, which
   locked new trainees out of his roster). `avail()` is true for anything owned, whatever its
   `release_en`. JP-only trainees can be given stars on Trainees; JP-only cards are listed under

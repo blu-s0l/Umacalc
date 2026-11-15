@@ -23,6 +23,14 @@ Umamusume: Pretty Derby (Global). One `index.html` in the house style from
 
 ## Decided
 
+- **Parents tab** (2026-11-15). Sub-tabs Parents, Grand-Parents, GGP and Compare. An entry is a
+  trainee, a label, the in-game score (to find it in the game's list), a blue spark, a pink spark,
+  the green (always the trainee's own unique; 0 stars = none) and any number of whites (typed by
+  name with a skill list; races and scenarios typed freely). Each spark takes 1–3 clicked stars.
+  Compare puts a candidate beside a kept entry of the chosen tier, with deltas for score, every
+  spark and the white list, and Add as new / Replace / Reject. Replace keeps the old label when
+  the candidate has none. No longer under construction. Stored as `root.par = {list: [{id, tier,
+  uma, label, sc, b: {t, n}, k: {t, n}, g, w: [{s, n}]}], next}`.
 - **Looks like RCalculator v2** (2026-11-14; Steve asked to match Calc v2's style). Panels, the
   modal, banners, slots and hover bubbles are square; buttons, inputs, pills and toggles stay
   round (one rule, last in the sheet). The masthead and tabs are a pinned top bar with underline

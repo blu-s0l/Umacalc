@@ -15,6 +15,7 @@
   --green:#2fd583; --greenbg:rgba(47,213,131,.10);
   --red:#f4655f;   --redbg:rgba(244,101,95,.10);
   --amber:#f0a832; --amberbg:rgba(240,168,50,.10);
+  --pink:#e86fa6;   /* pink sparks only */
   --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,"Liberation Mono",monospace;
   --sans:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
 }
@@ -305,6 +306,33 @@ tr.tot td{font-weight:700;border-top:1px solid var(--line2)}
 .split3{display:grid;grid-template-columns:repeat(3,minmax(0,340px));justify-content:start;gap:18px}
 @media(max-width:900px){.split3{grid-template-columns:1fr}}
 footer{margin-top:24px}
+.flat{color:var(--mut)}
+/* parents: sub-tabs under the main tabs, same underline language */
+.subtabs{display:flex;gap:2px;flex-wrap:wrap;border-bottom:1px solid var(--line);margin:0 0 14px}
+.subtabs button{background:none;border:0;border-bottom:2px solid transparent;border-radius:0;margin-bottom:-1px;
+                color:var(--mut);font-size:12.5px;font-weight:600;padding:6px 11px}
+.subtabs button:hover{color:var(--tx)}
+.subtabs button.on{color:var(--blue);border-bottom-color:var(--blue)}
+.subtabs .n{font-size:10.5px;color:var(--mut);font-weight:700;margin-left:5px}
+.pform{background:var(--panel2);border:1px solid var(--line);padding:12px 14px;margin-bottom:14px}
+.pform .fields{grid-template-columns:repeat(auto-fit,minmax(150px,1fr))}
+.sparks{display:flex;flex-direction:column;gap:6px;margin-top:12px;max-width:560px}
+.sprow{display:flex;align-items:center;gap:8px;min-height:34px}
+.sprow select,.sprow input{flex:1;min-width:0}
+.sprow .spn{flex:1;font-size:13px}
+.sts{display:inline-flex;flex:none}
+button.star{background:none;border:0;padding:0 2px;font-size:18px;line-height:1;color:var(--line2)}
+button.star.on{color:var(--gold)}
+button.star:hover{color:var(--blue);background:none}
+/* spark colour dots: the game's own blue / pink / green / white */
+.sd{display:inline-block;width:9px;height:9px;border-radius:50%;flex:none;margin-right:6px;vertical-align:0}
+.sprow .sd{margin-right:0}
+.sd.b{background:var(--blue)} .sd.k{background:var(--pink)} .sd.g{background:var(--green)} .sd.w{background:var(--sub)}
+.pst{color:var(--gold);font-size:11px;letter-spacing:-.5px}
+td.nw{white-space:nowrap}
+td.wsp{white-space:normal;min-width:240px;max-width:460px;font-size:12px}
+td.wsp .wc{display:inline-block;margin-right:12px;white-space:nowrap}
+table.pcmp td.lbl{display:table-cell}
 @media(max-width:900px){.slots{grid-template-columns:repeat(3,minmax(0,1fr))}}
 @media(max-width:660px){.split{grid-template-columns:1fr}.wrap{padding:0 12px 60px}.slots{grid-template-columns:repeat(2,minmax(0,1fr))}}
 /* squared corners, as in RCalculator v2: panels and the bubbles that float over them are square;
@@ -433,8 +461,37 @@ const COND_UNIQUE = 6;   // conditional unique effects aren't modelled; credit t
 const EFF_PCT = new Set([1,2,8,15,16,18,25,26,27,28]);
 
 /* ---------------- state ---------------- */
+// Parents: registered legacies, one list, each entry in a tier. Sparks: blue (a stat), pink (an
+// aptitude), green (always the trainee's own unique; 0 stars = none) and any number of whites
+// (a skill, race or scenario by name). Every spark carries 1–3 stars. sc is the in-game score,
+// kept so a row can be matched to the game's own list.
+// {list: [{id, tier, uma, label, sc, b: {t, n}, k: {t, n}, g, w: [{s, n}]}], next}
+const PTIERS = [["p", "Parents", "parent"], ["gp", "Grand-Parents", "grand-parent"], ["ggp", "GGP", "GGP"]];
+const PT = Object.fromEntries(PTIERS.map(t => [t[0], t]));
+const BLUE = [["spd", "Speed"], ["sta", "Stamina"], ["pow", "Power"], ["gut", "Guts"], ["wit", "Wit"]];
+const PINK = [["turf", "Turf"], ["dirt", "Dirt"], ["spr", "Sprint"], ["mile", "Mile"], ["med", "Medium"], ["long", "Long"],
+              ["front", "Front Runner"], ["pace", "Pace Chaser"], ["late", "Late Surger"], ["end", "End Closer"]];
+const BLUEN = Object.fromEntries(BLUE), PINKN = Object.fromEntries(PINK);
+const n3 = v => Math.max(0, Math.min(3, Math.round(+v) || 0));
+function parEntry(e) {
+  e = e && typeof e === "object" ? e : {};
+  const sp = (x, names) => ({t: x && names[x.t] ? x.t : "", n: n3(x && x.n)});
+  const sc = Math.round(+e.sc);
+  return {id: +e.id || 0, tier: PT[e.tier] ? e.tier : "p", uma: UBY[e.uma] ? +e.uma : null,
+          label: String(e.label || "").slice(0, 60), sc: e.sc != null && e.sc !== "" && sc >= 0 ? sc : null,
+          b: sp(e.b, BLUEN), k: sp(e.k, PINKN), g: n3(e.g),
+          w: Array.isArray(e.w) ? e.w.filter(s => s && typeof s.s === "string" && s.s.trim()).map(s => ({s: s.s.trim().slice(0, 80), n: n3(s.n) || 1})) : []};
+}
+function parNorm(x) {
+  const p = x && typeof x === "object" && !Array.isArray(x) ? x : {};
+  const list = (Array.isArray(p.list) ? p.list : []).map(parEntry);
+  let next = Math.max(1, +p.next || 1, ...list.map(e => e.id + 1));
+  const seen = new Set();
+  list.forEach(e => { if (!e.id || seen.has(e.id)) e.id = next++; seen.add(e.id); });
+  return {list, next};
+}
 function blank() {
-  return {schema: SCHEMA, umas: {}, tgt: {}, sups: {}, decks: [], inv: {on: {}, shards: {}}, cfg: cfgNorm(null), tt: ttNorm(null),
+  return {schema: SCHEMA, umas: {}, tgt: {}, sups: {}, decks: [], inv: {on: {}, shards: {}}, cfg: cfgNorm(null), tt: ttNorm(null), par: parNorm(null),
           team: {pins: [], prefs: [], excl: [], minG: "B", alts: 8},
           plan: {umas: {}, sups: {}, inv: {}, skills: [], open: {}, show: {}},
           set: {jp: false}};
@@ -464,6 +521,7 @@ function normalize(r) {
   r.team.pins.forEach(p => { if (typeof p.ace !== "boolean") p.ace = wasForced; });
   r.cfg = cfgNorm(r.cfg);
   r.tt = ttNorm(r.tt);
+  r.par = parNorm(r.par);
   for (const id in r.tgt) if (r.umas[id]) delete r.tgt[id];
   // Pins lock a race only (2026-10-17); clear any style lock saved before that.
   r.team.pins.forEach(p => { p.s = null; });
@@ -503,7 +561,8 @@ const UI = {tq: "", tShow: [], tShowAll: false, tSort: [["name", 1]], ttSort: [[
                  sty:  {on: [], g: "A", any: false, open: false},
                  show: {open: false}},
             sq: "", sType: "", sRar: "", sOwn: "all", sSort: [["score", -1]],
-            team: null, teamIdx: 0, hq: ""};
+            team: null, teamIdx: 0, hq: "",
+            paTab: "p", paEdit: null, paQ: "", paSort: [["sc", -1]], paCmp: {tier: "p", ex: null, d: null}, paErr: null, paMsg: ""};
 
 // On Global: released there by GameTora's date, or owned. Owning one proves it's out, so a late or
 // missing Global date in the data never locks a trainee or card out of the roster.
@@ -594,7 +653,7 @@ const TABS = [["trainees","Trainees"],["supports","Supports"],["planner","Planne
 const VIEWS = {};
 let tab = "trainees";
 // Tabs that are scaffolding only: flagged so nobody plans around them yet.
-const WIP = new Set(["supports", "decks", "aces", "parents", "hints", "inventory"]);
+const WIP = new Set(["supports", "decks", "aces", "hints", "inventory"]);
 // What each tab owns, for its red "Delete … data" button: label, what the confirm lists, and the
 // wipe itself. Shared stores are split by owner: Planner keeps targets and its filter, Inventory
 // keeps item and shard counts (Planner's Owned column reads them), Hint Sources keeps its skill
@@ -607,6 +666,7 @@ const WIPE = {
   teams:     ["Delete Teams data", "the Must include, Prefer and Exclude lists", r => { r.team.pins = []; r.team.prefs = []; r.team.excl = []; }],
   trials:    ["Delete Trials data", "the lineup, every recorded match, trained-copy numbers and settled replacements", r => { const s = r.tt.seeded; r.tt = ttNorm(null); r.tt.seeded = s; }],
   decks:     ["Delete Decks data", "every deck", r => { r.decks = []; }],
+  parents:   ["Delete Parents data", "every registered parent, grand-parent and GGP", r => { r.par = parNorm(null); UI.paEdit = null; UI.paCmp = {tier: "p", ex: null, d: null}; }],
   hints:     ["Delete Hint Sources data", "the tracked skill list", r => { r.plan.skills = []; }],
   settings:  ["Reset settings", "every team-building and Trials setting, back to its default", r => { r.cfg = cfgNorm(null); r.team.minG = "B"; r.team.alts = 8; }],
 };
@@ -1197,9 +1257,251 @@ function drawTeamOut() {
     <div class="card scroll"><div class="head">Ranked</div><table><thead><tr><th class="num">#</th><th class="num">Score</th><th class="num">Δ</th><th class="num">Size</th><th class="num">Sparks</th><th>vs best</th><th></th></tr></thead><tbody>${alts}</tbody></table></div>`;
 }
 
-/* ---------------- Aces / Parents (placeholders) ---------------- */
+/* ---------------- Aces (placeholder) ---------------- */
 VIEWS.aces = () => { view.innerHTML = `<div class="card"><div class="head" style="margin:0">Aces</div></div>`; };
-VIEWS.parents = () => { view.innerHTML = `<div class="card"><div class="head" style="margin:0">Parents</div></div>`; };
+
+/* ---------------- Parents ---------------- */
+// Registered legacies in three tiers, plus a Compare sub-tab for weighing a new one against one
+// already kept. Shapes (PTIERS, BLUE, PINK, parEntry, parNorm) sit with the state code above.
+const paName = e => e.label || (UBY[e.uma] ? UBY[e.uma].n : "—");
+const paWS = e => e.w.reduce((a, s) => a + s.n, 0);
+const paStars = e => e.b.n + e.k.n + e.g + paWS(e);
+const stTxt = n => n ? `<span class="pst">${"★".repeat(n)}</span>` : `<span class="gz">—</span>`;
+const paDraft = tier => ({id: 0, tier, uma: null, label: "", sc: null, b: {t: "", n: 0}, k: {t: "", n: 0}, g: 0, w: []});
+const paDraftOf = f => f === "c" ? UI.paCmp.d : UI.paEdit;
+const skByName = (() => { let m; return n => { if (!m) { m = new Map(); for (const k in D.skills) m.set(D.skills[k][0].toLowerCase(), +k); } return m.get(String(n).trim().toLowerCase()); }; })();
+// White sparks: skills (white and gold) by name; free text is kept too, for race and scenario sparks.
+let PSKL = "";
+const paSkillList = () => PSKL || (PSKL = [...new Set(Object.values(D.skills).filter(s => s[1] === 1 || s[1] === 2).map(s => s[0]))]
+  .sort((a, b) => a.localeCompare(b)).map(n => `<option value="${esc(n)}">`).join(""));
+const wName = s => { const id = skByName(s.s); return `<span class="${id && skGold(id) ? "gold" : ""}">${esc(s.s)}</span>`; };
+const spTxt = (x, names) => x.t ? `${names[x.t]} ${stTxt(x.n)}` : `<span class="gz">—</span>`;
+const paOpt = e => [paName(e), e.label && UBY[e.uma] ? UBY[e.uma].n : "", e.sc != null ? e.sc.toLocaleString() : ""].filter(Boolean).join(" · ");
+// A draft is checked before it is kept: a trainee, and the blue and pink sparks with their stars.
+const paCheck = d => !d.uma ? "Pick a trainee." : !d.b.t || !d.b.n ? "Pick the blue spark and its stars." : !d.k.t || !d.k.n ? "Pick the pink spark and its stars." : "";
+const paClean = d => parEntry({...d, w: d.w.map(s => ({s: s.s.trim(), n: s.n})).filter(s => s.s)});
+
+VIEWS.parents = () => {
+  const cnt = t => root.par.list.filter(e => e.tier === t).length;
+  const b = (k, n, c) => `<button class="${UI.paTab === k ? "on" : ""}" data-act="patab" data-t="${k}">${n}${c != null ? `<span class="n">${c}</span>` : ""}</button>`;
+  view.innerHTML = `<nav class="subtabs">${PTIERS.map(([k, n]) => b(k, n, cnt(k))).join("")}${b("cmp", "Compare")}</nav>
+    <div id="paBody"></div><datalist id="pskl">${paSkillList()}</datalist>`;
+  drawParents();
+};
+function drawParents() {
+  if (UI.paTab === "cmp") drawPaCmp(); else drawPaReg();
+  UI.paErr = null; UI.paMsg = "";
+}
+// The editor: shared by the register (f "e") and the Compare candidate (f "c").
+function paForm(d, f) {
+  const u = UBY[d.uma];
+  const um = UMAS.filter(x => avail(x) || x.id === d.uma).sort((a, b) => a.n.localeCompare(b.n) || a.t.localeCompare(b.t));
+  const st = (fld, n, i) => `<span class="sts">${[1, 2, 3].map(k => `<button class="star${k <= n ? " on" : ""}" data-act="pastar" data-pf="${f}" data-fld="${fld}"${i != null ? ` data-i="${i}"` : ""} data-n="${k}" aria-label="${k} star${k > 1 ? "s" : ""}">★</button>`).join("")}</span>`;
+  const sel = (act, list, v) => `<select data-act="${act}" data-pf="${f}"><option value="">—</option>${list.map(([k, n]) => `<option value="${k}"${k === v ? " selected" : ""}>${n}</option>`).join("")}</select>`;
+  const err = UI.paErr && UI.paErr[0] === f ? `<div class="err">${esc(UI.paErr[1])}</div>` : "";
+  return `<div class="pform">
+    <div class="fields">
+      <div style="grid-column:span 2"><label>Trainee</label><select data-act="pauma" data-pf="${f}"><option value="">—</option>${um.map(x => `<option value="${x.id}"${x.id === d.uma ? " selected" : ""}>${esc(x.n)}${x.t ? " · " + esc(x.t) : ""}</option>`).join("")}</select></div>
+      <div><label>Label</label><input data-act="palabel" data-pf="${f}" value="${esc(d.label)}" maxlength="60"></div>
+      <div><label>Score</label><input type="number" min="0" data-act="pasc" data-pf="${f}" value="${d.sc ?? ""}"></div>
+      ${f === "e" ? `<div><label>Tier</label>${sel("patier", PTIERS.map(t => [t[0], t[1]]), d.tier).replace('<option value="">—</option>', "")}</div>` : ""}
+    </div>
+    <div class="sparks">
+      <div class="sprow"><span class="sd b"></span>${sel("pab", BLUE, d.b.t)}${st("b", d.b.n)}</div>
+      <div class="sprow"><span class="sd k"></span>${sel("pak", PINK, d.k.t)}${st("k", d.k.n)}</div>
+      <div class="sprow"><span class="sd g"></span><span class="spn">${u && u.u ? esc(skName(u.u)) : "Unique"}</span>${st("g", d.g)}</div>
+      ${d.w.map((s, i) => `<div class="sprow"><span class="sd w"></span><input list="pskl" data-act="paw" data-pf="${f}" data-i="${i}" value="${esc(s.s)}" maxlength="80">${st("w", s.n, i)}<button class="x" data-act="pawx" data-pf="${f}" data-i="${i}" aria-label="Remove white spark">×</button></div>`).join("")}
+      <div class="sprow"><span class="sd w"></span><button class="small" data-act="pawadd" data-pf="${f}">+ White spark</button></div>
+    </div>
+    ${f === "e" ? `<div class="row" style="margin-top:12px"><button class="primary" data-act="pasave">${d.id ? "Save" : "Add"}</button><button class="small" data-act="pacancel">Cancel</button></div>` : ""}
+    ${err}
+  </div>`;
+}
+function drawPaReg() {
+  const t = UI.paTab;
+  $("paBody").innerHTML = `<div class="card">
+    <div class="row" style="align-items:center;margin-bottom:10px">
+      <div class="head" style="margin:0">${PT[t][1]}</div>
+      ${UI.paEdit ? "" : `<button class="small primary" data-act="panew">+ New ${PT[t][2]}</button>`}
+      <input id="paq" placeholder="Search" value="${esc(UI.paQ)}" style="max-width:240px;margin-left:auto">
+    </div>
+    ${UI.paEdit ? paForm(UI.paEdit, "e") : ""}
+    <div class="scroll" id="paList"></div></div>`;
+  drawPaList();
+}
+function drawPaList() {
+  const box = $("paList");
+  if (!box) return;
+  const q = UI.paQ.trim().toLowerCase();
+  const hay = e => { const u = UBY[e.uma]; return [e.label, u ? u.n + " " + u.t : "", e.sc ?? "", e.sc != null ? e.sc.toLocaleString() : "", BLUEN[e.b.t], PINKN[e.k.t], ...e.w.map(s => s.s)].join(" ").toLowerCase(); };
+  const rows = root.par.list.filter(e => e.tier === UI.paTab && (!q || hay(e).includes(q)));
+  if (!rows.length) { box.innerHTML = `<div class="muted">${q ? "No match." : "None yet."}</div>`; return; }
+  const val = (e, k) => ({name: paName(e).toLowerCase(), tr: (UBY[e.uma] ? UBY[e.uma].n : "").toLowerCase(), sc: e.sc ?? -1,
+                          b: e.b.n, k: e.k.n, g: e.g, w: paWS(e), all: paStars(e)})[k];
+  sortBy(rows, UI.paSort, val);
+  const h = (k, l, c = "") => sortHead(UI.paSort, "pa", k, l, c);
+  box.innerHTML = `<table class="ptbl"><thead><tr>${h("name", "Label")}${h("tr", "Trainee")}${h("sc", "Score", "num")}${h("b", "Blue")}${h("k", "Pink")}${h("g", "Green")}${h("w", "White")}${h("all", "★", "num")}<th></th></tr></thead><tbody>${rows.map(e => {
+    const u = UBY[e.uma];
+    return `<tr><td class="nw">${e.label ? `<a class="nm" data-act="paedit" data-id="${e.id}">${esc(e.label)}</a>` : `<span class="gz">—</span>`}</td>
+      <td class="nw">${u ?`<a class="nm" data-act="paedit" data-id="${e.id}">${esc(u.n)}</a><div class="ttl">${esc(u.t)}</div>` : "—"}</td>
+      <td class="num">${e.sc != null ? e.sc.toLocaleString() : ""}</td>
+      <td class="nw"><span class="sd b"></span>${spTxt(e.b, BLUEN)}</td><td class="nw"><span class="sd k"></span>${spTxt(e.k, PINKN)}</td>
+      <td class="nw"><span class="sd g"></span>${e.g ? `${u && u.u ? esc(skName(u.u)) + " " : ""}${stTxt(e.g)}` : `<span class="gz">—</span>`}</td>
+      <td class="wsp">${e.w.map(s => `<span class="wc">${wName(s)} ${stTxt(s.n)}</span>`).join("") || `<span class="gz">—</span>`}</td>
+      <td class="num">${paStars(e)}</td>
+      <td class="nw" style="text-align:right"><button class="small" data-act="pacmp" data-id="${e.id}">Compare</button> <button class="small" data-act="paedit" data-id="${e.id}">Edit</button> <button class="x" data-act="padel" data-id="${e.id}" aria-label="Delete">×</button></td></tr>`;
+  }).join("")}</tbody></table>`;
+}
+// Read-only view of a kept entry, laid out like the editor so the two columns line up.
+function paCard(e) {
+  const u = UBY[e.uma];
+  return `<div class="pform">
+    <div class="mtitle" style="font-size:16px">${esc(u ? u.n : "—")}</div><div class="ttl">${esc(u ? u.t : "")}</div>
+    <div class="kv">${e.label ? esc(e.label) : ""}${e.label && e.sc != null ? '<span class="vbar">|</span>' : ""}${e.sc != null ? `<span class="mono">${e.sc.toLocaleString()}</span>` : ""}</div>
+    <div class="sparks">
+      <div class="sprow"><span class="sd b"></span><span class="spn">${spTxt(e.b, BLUEN)}</span></div>
+      <div class="sprow"><span class="sd k"></span><span class="spn">${spTxt(e.k, PINKN)}</span></div>
+      <div class="sprow"><span class="sd g"></span><span class="spn">${u && u.u ? esc(skName(u.u)) : "Unique"} ${stTxt(e.g)}</span></div>
+      ${e.w.map(s => `<div class="sprow"><span class="sd w"></span><span class="spn">${wName(s)} ${stTxt(s.n)}</span></div>`).join("")}
+    </div></div>`;
+}
+function drawPaCmp() {
+  const c = UI.paCmp;
+  if (!c.d) c.d = paDraft(c.tier);
+  const list = root.par.list.filter(e => e.tier === c.tier);
+  if (!list.some(e => e.id === c.ex)) c.ex = null;
+  const ex = list.find(e => e.id === c.ex);
+  $("paBody").innerHTML = `<div class="card">
+    <div class="fields" style="max-width:640px">
+      <div><label>Tier</label><select data-act="pactier">${PTIERS.map(([k, n]) => `<option value="${k}"${k === c.tier ? " selected" : ""}>${n}</option>`).join("")}</select></div>
+      <div style="grid-column:span 2"><label>Existing</label><select data-act="pacex"><option value="">—</option>${list.map(e => `<option value="${e.id}"${e.id === c.ex ? " selected" : ""}>${esc(paOpt(e))}</option>`).join("")}</select></div>
+    </div>
+    <div class="split" style="margin-top:14px">
+      <div><div class="head">Existing</div>${ex ? paCard(ex) : `<div class="muted">—</div>`}</div>
+      <div><div class="head">Candidate</div>${paForm(c.d, "c")}</div>
+    </div>
+    <div id="paCmpT"></div>
+    <div class="row" style="margin-top:12px">
+      <button class="primary" data-act="paadd">Add as new ${PT[c.tier][2]}</button>
+      <button data-act="parep"${ex ? "" : " disabled"}>Replace${ex ? " " + esc(paName(ex)) : ""}</button>
+      <button class="danger" data-act="parej">Reject</button>
+    </div>
+    ${UI.paMsg ? `<div class="okmsg">${esc(UI.paMsg)}</div>` : ""}
+  </div>`;
+  drawPaCmpT();
+}
+// Side by side: the headline figures, then every white spark either one carries.
+function drawPaCmpT() {
+  const box = $("paCmpT");
+  if (!box) return;
+  const c = UI.paCmp, ex = root.par.list.find(e => e.id === c.ex);
+  if (!ex) { box.innerHTML = ""; return; }
+  const d = {...c.d, w: c.d.w.filter(s => s.s.trim())};
+  const dl = (a, b) => a == null || b == null ? "" : `<span class="${b > a ? "pos" : b < a ? "neg" : "flat"}">${b > a ? "+" : ""}${(b - a).toLocaleString()}</span>`;
+  const num = v => v != null ? `<span class="mono">${v.toLocaleString()}</span>` : `<span class="gz">—</span>`;
+  const rows = [
+    ["Score", num(ex.sc), num(d.sc), dl(ex.sc, d.sc)],
+    ["Blue", spTxt(ex.b, BLUEN), spTxt(d.b, BLUEN), ex.b.t === d.b.t ? dl(ex.b.n, d.b.n) : ""],
+    ["Pink", spTxt(ex.k, PINKN), spTxt(d.k, PINKN), ex.k.t === d.k.t ? dl(ex.k.n, d.k.n) : ""],
+    ["Green", stTxt(ex.g), stTxt(d.g), ex.uma === d.uma ? dl(ex.g, d.g) : ""],
+    ["White sparks", num(ex.w.length), num(d.w.length), dl(ex.w.length, d.w.length)],
+    ["White ★", num(paWS(ex)), num(paWS(d)), dl(paWS(ex), paWS(d))],
+    ["All ★", num(paStars(ex)), num(paStars(d)), dl(paStars(ex), paStars(d))],
+  ];
+  const wm = new Map();
+  const put = (s, side) => { const k = s.s.trim().toLowerCase(), o = wm.get(k) || {s, a: 0, b: 0}; o[side] += s.n; wm.set(k, o); };
+  ex.w.forEach(s => put(s, "a"));
+  d.w.forEach(s => put(s, "b"));
+  const ws = [...wm.values()].sort((x, y) => (!!y.a && !!y.b) - (!!x.a && !!x.b) || x.s.s.localeCompare(y.s.s));
+  box.innerHTML = `<div class="split" style="margin-top:14px">
+    <div class="scroll"><table class="pcmp"><thead><tr><th></th><th>Existing</th><th>Candidate</th><th class="num">Δ</th></tr></thead><tbody>
+      ${rows.map(r => `<tr><td class="lbl" style="margin:0">${r[0]}</td><td>${r[1]}</td><td>${r[2]}</td><td class="num">${r[3]}</td></tr>`).join("")}</tbody></table></div>
+    <div class="scroll">${ws.length ? `<table class="pcmp"><thead><tr><th>White spark</th><th>Existing</th><th>Candidate</th><th class="num">Δ</th></tr></thead><tbody>
+      ${ws.map(o => `<tr><td>${wName(o.s)}</td><td>${stTxt(o.a)}</td><td>${stTxt(o.b)}</td><td class="num">${dl(o.a, o.b)}</td></tr>`).join("")}</tbody></table>` : ""}</div>
+  </div>`;
+}
+function paSave() {
+  const d = UI.paEdit, err = paCheck(d);
+  if (err) { UI.paErr = ["e", err]; drawParents(); return; }
+  const e = paClean(d), i = root.par.list.findIndex(x => x.id === d.id);
+  if (i >= 0) root.par.list[i] = e; else { e.id = root.par.next++; root.par.list.push(e); }
+  UI.paEdit = null; save(); VIEWS.parents();
+}
+function paClick(a, el) {
+  const id = +el.dataset.id, f = el.dataset.pf, d = f ? paDraftOf(f) : null, c = UI.paCmp;
+  const ent = root.par.list.find(x => x.id === id);
+  const redraw = () => f === "c" ? drawPaCmp() : drawParents();
+  switch (a) {
+    case "patab": UI.paTab = el.dataset.t; UI.paEdit = null; VIEWS.parents(); break;
+    case "panew": UI.paEdit = paDraft(UI.paTab); drawParents(); view.querySelector('select[data-act="pauma"]').focus(); break;
+    case "paedit": UI.paEdit = JSON.parse(JSON.stringify(ent)); drawParents(); view.querySelector(".pform").scrollIntoView({behavior: "smooth", block: "nearest"}); break;
+    case "pacancel": UI.paEdit = null; drawParents(); break;
+    case "pasave": paSave(); break;
+    case "padel": if (ent && confirm(`Delete ${paName(ent)}?`)) { root.par.list = root.par.list.filter(x => x !== ent); if (c.ex === id) c.ex = null; save(); VIEWS.parents(); } break;
+    case "pacmp":
+      UI.paTab = "cmp"; c.tier = ent.tier; c.ex = ent.id;
+      if (!c.d || (!c.d.uma && !c.d.b.t && !c.d.w.length)) { c.d = paDraft(ent.tier); c.d.uma = ent.uma; }
+      VIEWS.parents(); break;
+    // Stars: click sets the count; clicking the lit top star again clears it (whites keep at least one).
+    case "pastar": {
+      const n = +el.dataset.n, fld = el.dataset.fld;
+      if (fld === "w") d.w[+el.dataset.i].n = n;
+      else if (fld === "g") d.g = d.g === n ? 0 : n;
+      else d[fld].n = d[fld].n === n ? 0 : n;
+      redraw(); break;
+    }
+    case "pawadd": d.w.push({s: "", n: 1}); redraw(); { const ins = view.querySelectorAll(`input[data-act="paw"][data-pf="${f}"]`); ins[ins.length - 1].focus(); } break;
+    case "pawx": d.w.splice(+el.dataset.i, 1); redraw(); break;
+    case "paadd": case "parep": {
+      const err = paCheck(c.d);
+      if (err) { UI.paErr = ["c", err]; drawParents(); break; }
+      const ex = root.par.list.find(x => x.id === c.ex), e = paClean(c.d);
+      if (a === "parep") {
+        if (!ex || !confirm(`Replace ${paName(ex)} with the candidate?`)) break;
+        e.id = ex.id; e.tier = ex.tier; if (!e.label) e.label = ex.label;
+        root.par.list[root.par.list.indexOf(ex)] = e;
+        UI.paMsg = `Replaced ${paName(e)}.`;
+      } else {
+        e.id = root.par.next++; e.tier = c.tier; root.par.list.push(e);
+        UI.paMsg = `Added to ${PT[c.tier][1]}.`;
+      }
+      c.ex = e.id; c.d = paDraft(c.tier); save(); VIEWS.parents(); break;
+    }
+    case "parej": c.d = paDraft(c.tier); drawParents(); break;
+  }
+}
+function paChange(a, el) {
+  const f = el.dataset.pf, d = f ? paDraftOf(f) : null, v = el.value, c = UI.paCmp;
+  const redraw = () => f === "c" || !f ? drawPaCmp() : drawParents();
+  switch (a) {
+    case "pauma": d.uma = v ? +v : null; redraw(); break;
+    case "pab": d.b.t = v; if (v && !d.b.n) d.b.n = 1; redraw(); break;
+    case "pak": d.k.t = v; if (v && !d.k.n) d.k.n = 1; redraw(); break;
+    case "patier": d.tier = v; break;
+    case "pactier": c.tier = v; c.ex = null; c.d.tier = v; drawPaCmp(); break;
+    case "pacex": {
+      c.ex = v ? +v : null;
+      const ex = root.par.list.find(x => x.id === c.ex);
+      if (ex && !c.d.uma) c.d.uma = ex.uma;
+      drawPaCmp(); break;
+    }
+  }
+}
+function paInput(el) {
+  const a = el.dataset.act, f = el.dataset.pf, d = f ? paDraftOf(f) : null;
+  if (el.id === "paq") { UI.paQ = el.value; drawPaList(); return; }
+  if (!d) return;
+  if (a === "palabel") d.label = el.value;
+  else if (a === "pasc") d.sc = el.value === "" ? null : Math.max(0, Math.round(+el.value) || 0);
+  else if (a === "paw") d.w[+el.dataset.i].s = el.value;
+  else return;
+  if (f === "c") drawPaCmpT();
+}
+// Enter in a white spark adds the next one, so a list can be typed straight through.
+view.addEventListener("keydown", e => {
+  const el = e.target;
+  if (e.key === "Enter" && el.dataset && el.dataset.act === "paw") { e.preventDefault(); paClick("pawadd", el); }
+});
 
 /* ---------------- Inventory ---------------- */
 // What it takes to max every switched-on trainee: 5★, P5, and Lv3 hints on all four
@@ -1934,18 +2236,19 @@ function redraw() { show(); }
 function onClick(e) {
   const th = e.target.closest("th[data-sort]");
   if (th) {
-    const st = {t: "tSort", s: "sSort", tt: "ttSort"}[th.dataset.tab], k = th.dataset.sort;
+    const st = {t: "tSort", s: "sSort", tt: "ttSort", pa: "paSort"}[th.dataset.tab], k = th.dataset.sort;
     // First click: names, races, placings and replace rank ascend; figures descend.
     // Same column again flips it; a new column becomes the main sort and the old ones stay behind it.
     const cur = UI[st];
     UI[st] = cur[0][0] === k ? [[k, -cur[0][1]], ...cur.slice(1)]
-      : [[k, ["name", "type", "race", "place", "rank"].includes(k) ? 1 : -1], ...cur.filter(x => x[0] !== k)].slice(0, SORT_DEPTH);
-    ({t: drawTrainees, s: drawSupports, tt: drawTrials})[th.dataset.tab]();
+      : [[k, ["name", "type", "race", "place", "rank", "tr"].includes(k) ? 1 : -1], ...cur.filter(x => x[0] !== k)].slice(0, SORT_DEPTH);
+    ({t: drawTrainees, s: drawSupports, tt: drawTrials, pa: drawPaList})[th.dataset.tab]();
     return;
   }
   const el = e.target.closest("[data-act]");
   if (!el || el.tagName === "SELECT" || el.tagName === "INPUT") return;
   const a = el.dataset.act, id = +el.dataset.id, i = +el.dataset.i;
+  if (a.startsWith("pa")) { paClick(a, el); return; }   // Parents tab
   const deck = root.decks[i];
   switch (a) {
     case "uinfo": uInfo(UBY[id]); break;
@@ -2077,6 +2380,7 @@ function onChange(e) {
     return;
   }
   if (["sType", "sRar", "sOwn"].includes(el.id)) { UI[el.id] = v; drawSupports(); return; }
+  if (a && a.startsWith("pa") && el.tagName === "SELECT") { paChange(a, el); return; }
   const deck = root.decks[i];
   switch (a) {
     case "ustar":
@@ -2128,7 +2432,8 @@ function onChange(e) {
 }
 function onInput(e) {
   const el = e.target;
-  if (el.id === "tq") { UI.tq = el.value; drawTrainees(); }
+  if (el.id === "paq" || (el.dataset.act || "").startsWith("pa")) { if (el.tagName === "INPUT") paInput(el); }
+  else if (el.id === "tq") { UI.tq = el.value; drawTrainees(); }
   else if (el.id === "sq") { UI.sq = el.value; drawSupports(); }
   else if (el.dataset.act === "dname") { root.decks[+el.dataset.i].name = el.value; save(); }
   // Inventory counts update the tables live; the entry fields themselves are never redrawn.

@@ -172,6 +172,15 @@ def main(dl):
         fh.write(js)
     print(f"data.js: {len(umas)} trainees, {len(sups)} supports, {len(skills)} skills, {len(js)//1024} KB")
     print(f"white sparks: {len(wf['skill'])} skills, {len(wf['race'])} races, {len(wf['scen'])} scenarios")
+    # index.html loads data.js?v=<built>, so a browser never pairs a new page with a cached old data.js.
+    page = os.path.join(os.path.dirname(dest), "index.html")
+    with open(page, encoding="utf-8", newline="") as fh:
+        html = fh.read()
+    html2, n = re.subn(r'src="data\.js(\?v=[^"]*)?"', f'src="data.js?v={out["built"]}"', html)
+    if n == 1 and html2 != html:
+        with open(page, "w", encoding="utf-8", newline="") as fh:
+            fh.write(html2)
+    print(f"index.html data.js tag: v={out['built']}" + ("" if n == 1 else " (tag not found!)"))
     fetch_portraits(umas)
 
 

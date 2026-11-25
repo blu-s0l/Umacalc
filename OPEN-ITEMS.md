@@ -27,6 +27,12 @@ Umamusume: Pretty Derby (Global). One `index.html` in the house style from
   containing "ta"). A text box with a drop-down list (`cbOpen`/`cbDraw`), matched on the name only,
   names starting with the text first. Arrows move, Enter or click picks and moves on to Label,
   Escape or leaving puts the current pick back. Used in both the register form and Compare.
+  White sparks use the same picker (2026-11-25; Steve couldn't pick Japanese Oaks from the
+  browser's native datalist): races and scenarios are tagged, an exact name ranks first, Enter
+  picks the highlighted spark and opens the next row, text that matches nothing is kept as
+  typed, and a name typed in another case takes the list's spelling. `index.html` loads
+  `data.js?v=<built>` (build_data.py rewrites the tag), so a cached old data.js without `wf` can't
+  be paired with a new page; if `wf` is ever missing the list falls back to all white skills.
 - **White sparks come from GameTora's factor list** (2026-11-25; Steve: race sparks were
   missing, and "Best in Japan" can't be inherited). `D.wf` = skill sparks (447), G1 race sparks
   (35) and scenario sparks (5 named on Global). Trainee-specific evolved skills have no spark, and

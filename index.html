@@ -335,6 +335,8 @@ td.wsp .wc{display:inline-block;margin-right:12px;white-space:nowrap}
 table.pcmp td.lbl{display:table-cell}
 /* trainee picker: a text box whose list drops over the page and filters as you type */
 .combo{position:relative}
+.sprow .combo{flex:1;min-width:0}
+.sprow .combo input{width:100%}
 .cbox{position:absolute;top:calc(100% + 3px);left:0;right:0;z-index:30;max-height:300px;overflow:auto;background:var(--panel2);
       border:1px solid rgba(77,159,255,.5);box-shadow:0 8px 24px rgba(0,0,0,.45)}
 button.copt{display:block;width:100%;text-align:left;border:0;border-radius:0;background:none;padding:6px 10px;font-size:13px;white-space:normal}
@@ -376,7 +378,7 @@ details.hsk td.mono{white-space:nowrap}
 </div>
 <div class="modal" id="modal"><div class="modalcard" id="modalcard"></div></div>
 <button class="totop" id="totop" aria-label="Back to top"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M12 19V5M5 12l7-7 7 7" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
-<script src="data.js"></script>
+<script src="data.js?v=2026-11-25"></script>
 <script>
 "use strict";
 const VERSION = "0.7";
@@ -1290,13 +1292,12 @@ const paDraft = tier => ({id: 0, tier, uma: null, label: "", sc: null, b: {t: ""
 const paDraftOf = f => f === "c" ? UI.paCmp.d : UI.paEdit;
 const skByName = (() => { let m; return n => { if (!m) { m = new Map(); for (const k in D.skills) m.set(D.skills[k][0].toLowerCase(), +k); } return m.get(String(n).trim().toLowerCase()); }; })();
 // White sparks offered: only what can be inherited (D.wf, from GameTora's factor list): skill
-// sparks, G1 race sparks and scenario sparks. Typing anything else is still kept.
-let PSKL = "";
-const paSkillList = () => PSKL || (PSKL = (() => {
-  const wf = D.wf || {skill: [], race: [], scen: []};
-  const o = (n, l) => `<option value="${esc(n)}"${l ? ` label="${l}"` : ""}>`;
-  return wf.skill.map(n => o(n)).concat(wf.race.map(n => o(n, "Race")), wf.scen.map(n => o(n, "Scenario"))).join("");
-})());
+// sparks, G1 race sparks and scenario sparks. Typing anything else is still kept. Data without
+// wf (an old cached data.js) falls back to every white skill rather than an empty list.
+let WSP = null;
+const wSparks = () => WSP || (WSP = D.wf
+  ? D.wf.skill.map(n => ({v: n, n, t: ""})).concat(D.wf.race.map(n => ({v: n, n, t: "Race"})), D.wf.scen.map(n => ({v: n, n, t: "Scenario"})))
+  : [...new Set(Object.values(D.skills).filter(s => s[1] === 1).map(s => s[0]))].map(n => ({v: n, n, t: ""})));
 const wName = s => { const id = skByName(s.s); return `<span class="${id && skGold(id) ? "gold" : ""}">${esc(s.s)}</span>`; };
 const spTxt = (x, names) => x.t ? `${names[x.t]} ${stTxt(x.n)}` : `<span class="gz">—</span>`;
 const paOpt = e => [paName(e), e.label && UBY[e.uma] ? UBY[e.uma].n : "", e.sc != null ? e.sc.toLocaleString() : ""].filter(Boolean).join(" · ");
@@ -1308,48 +1309,62 @@ VIEWS.parents = () => {
   const cnt = t => root.par.list.filter(e => e.tier === t).length;
   const b = (k, n, c) => `<button class="${UI.paTab === k ? "on" : ""}" data-act="patab" data-t="${k}">${n}${c != null ? `<span class="n">${c}</span>` : ""}</button>`;
   view.innerHTML = `<nav class="subtabs">${PTIERS.map(([k, n]) => b(k, n, cnt(k))).join("")}${b("cmp", "Compare")}</nav>
-    <div id="paBody"></div><datalist id="pskl">${paSkillList()}</datalist>`;
+    <div id="paBody"></div>`;
   drawParents();
 };
 function drawParents() {
   if (UI.paTab === "cmp") drawPaCmp(); else drawPaReg();
   UI.paErr = null; UI.paMsg = "";
 }
-// Trainee picker: typing keeps only trainees with the text anywhere in their name; names that
-// start with it come first. Arrows move, Enter or a click picks, Escape or leaving puts back the
-// current pick.
+// Pickers (trainee: data-act "pauq"; white spark: "paw"): typing keeps only entries with the text
+// anywhere in their name; an exact name, then names starting with it, come first. Arrows move,
+// Enter or a click picks. Trainee: Escape or leaving puts back the current pick. White spark:
+// what is typed is kept as it stands (free text allowed); Enter picks the highlighted spark when
+// the list shows one, then opens the next white row.
 let cbList = [], cbHi = 0;
 const umaLbl = u => u.n + (u.t ? " · " + u.t : "");
+const isCombo = el => el.dataset && (el.dataset.act === "pauq" || el.dataset.act === "paw");
 function cbOpen(inp, q) {
   const d = paDraftOf(inp.dataset.pf);
   q = (q || "").trim().toLowerCase();
-  const st = x => x.n.toLowerCase().startsWith(q);
-  cbList = UMAS.filter(x => (avail(x) || x.id === d.uma) && (!q || x.n.toLowerCase().includes(q)))
-    .sort((a, b) => (st(b) - st(a)) || a.n.localeCompare(b.n) || a.t.localeCompare(b.t));
+  const pool = inp.dataset.act === "pauq"
+    ? UMAS.filter(x => avail(x) || x.id === d.uma).map(x => ({v: x.id, n: x.n, t: x.t}))
+    : wSparks();
+  const rank = x => { const n = x.n.toLowerCase(); return n === q ? 0 : n.startsWith(q) ? 1 : 2; };
+  cbList = pool.filter(x => !q || x.n.toLowerCase().includes(q))
+    .sort((a, b) => (rank(a) - rank(b)) || a.n.localeCompare(b.n) || a.t.localeCompare(b.t));
   cbHi = 0;
   cbDraw(inp);
 }
 function cbDraw(inp) {
-  const box = inp.nextElementSibling;
+  const box = inp.nextElementSibling, w = inp.dataset.act === "paw";
   box.hidden = false;
-  box.innerHTML = cbList.length ? cbList.map((x, i) => `<button type="button" tabindex="-1" class="copt${i === cbHi ? " on" : ""}" data-act="paupick" data-pf="${inp.dataset.pf}" data-id="${x.id}">${esc(x.n)}${x.t ? ` <span class="ttl">${esc(x.t)}</span>` : ""}</button>`).join("")
-    : `<div class="muted" style="padding:6px 10px">No match.</div>`;
+  box.innerHTML = cbList.length ? cbList.map((x, i) => `<button type="button" tabindex="-1" class="copt${i === cbHi ? " on" : ""}" data-act="papick" data-pf="${inp.dataset.pf}" data-k="${i}"${w ? ` data-i="${inp.dataset.i}"` : ""}>${esc(x.n)}${x.t ? ` <span class="ttl">${esc(x.t)}</span>` : ""}</button>`).join("")
+    : `<div class="muted" style="padding:6px 10px">${w ? "Not in the list; kept as typed." : "No match."}</div>`;
   const on = box.querySelector(".copt.on");
   if (on) box.scrollTop = Math.max(0, Math.min(box.scrollTop, on.offsetTop), on.offsetTop + on.offsetHeight - box.clientHeight);
 }
 function cbClose(inp) {
-  const d = paDraftOf(inp.dataset.pf), u = d && UBY[d.uma];
-  inp.value = u ? umaLbl(u) : "";
+  const d = paDraftOf(inp.dataset.pf);
+  if (inp.dataset.act === "pauq") { const u = d && UBY[d.uma]; inp.value = u ? umaLbl(u) : ""; }
+  else if (d) {
+    // a spark typed in another case takes the list's spelling
+    const v = inp.value.trim().toLowerCase(), hit = v && wSparks().find(x => x.n.toLowerCase() === v);
+    if (hit && d.w[+inp.dataset.i]) { d.w[+inp.dataset.i].s = inp.value = hit.n; if (inp.dataset.pf === "c") drawPaCmpT(); }
+  }
   inp.nextElementSibling.hidden = true;
 }
-function cbPick(f, id) {
-  paDraftOf(f).uma = id;
+// Pick list entry k for the picker it belongs to; next = after a white spark, open the next row.
+function cbPick(f, k, wi, next) {
+  const x = cbList[k], d = paDraftOf(f);
+  if (!x) return;
+  if (wi == null) d.uma = x.v; else d.w[wi].s = x.v;
+  if (next) { paClick("pawadd", {dataset: {pf: f}}); return; }
   if (f === "c") drawPaCmp(); else drawParents();
-  const nx = view.querySelector(`input[data-act="palabel"][data-pf="${f}"]`);
-  if (nx) nx.focus();
+  if (wi == null) { const nx = view.querySelector(`input[data-act="palabel"][data-pf="${f}"]`); if (nx) nx.focus(); }
 }
-view.addEventListener("focusin", e => { const el = e.target; if (el.dataset && el.dataset.act === "pauq") { el.select(); cbOpen(el, ""); } });
-view.addEventListener("focusout", e => { const el = e.target; if (el.dataset && el.dataset.act === "pauq") cbClose(el); });
+view.addEventListener("focusin", e => { const el = e.target; if (isCombo(el)) { if (el.dataset.act === "pauq") el.select(); cbOpen(el, el.dataset.act === "paw" ? el.value : ""); } });
+view.addEventListener("focusout", e => { const el = e.target; if (isCombo(el)) cbClose(el); });
 // A click in the list mustn't take focus from the box first, or it closes before the click lands.
 view.addEventListener("mousedown", e => { if (e.target.closest(".cbox")) e.preventDefault(); });
 
@@ -1370,7 +1385,7 @@ function paForm(d, f) {
       <div class="sprow"><span class="sd b"></span>${sel("pab", BLUE, d.b.t)}${st("b", d.b.n)}</div>
       <div class="sprow"><span class="sd k"></span>${sel("pak", PINK, d.k.t)}${st("k", d.k.n)}</div>
       <div class="sprow"><span class="sd g"></span><span class="spn">${u && u.u ? esc(skName(u.u)) : "Unique"}</span>${st("g", d.g)}</div>
-      ${d.w.map((s, i) => `<div class="sprow"><span class="sd w"></span><input list="pskl" data-act="paw" data-pf="${f}" data-i="${i}" value="${esc(s.s)}" maxlength="80">${st("w", s.n, i)}<button class="x" data-act="pawx" data-pf="${f}" data-i="${i}" aria-label="Remove white spark">×</button></div>`).join("")}
+      ${d.w.map((s, i) => `<div class="sprow"><span class="sd w"></span><div class="combo"><input data-act="paw" data-pf="${f}" data-i="${i}" value="${esc(s.s)}" maxlength="80" autocomplete="off" spellcheck="false" role="combobox" aria-label="White spark"><div class="cbox" hidden></div></div>${st("w", s.n, i)}<button class="x" data-act="pawx" data-pf="${f}" data-i="${i}" aria-label="Remove white spark">×</button></div>`).join("")}
       <div class="sprow"><span class="sd w"></span><button class="small" data-act="pawadd" data-pf="${f}">+ White spark</button></div>
     </div>
     ${f === "e" ? `<div class="row" style="margin-top:12px"><button class="primary" data-act="pasave">${d.id ? "Save" : "Add"}</button><button class="small" data-act="pacancel">Cancel</button></div>` : ""}
@@ -1494,7 +1509,7 @@ function paClick(a, el) {
   switch (a) {
     case "patab": UI.paTab = el.dataset.t; UI.paEdit = null; VIEWS.parents(); break;
     case "panew": UI.paEdit = paDraft(UI.paTab); drawParents(); view.querySelector('input[data-act="pauq"]').focus(); break;
-    case "paupick": cbPick(f, id); break;
+    case "papick": cbPick(f, +el.dataset.k, el.dataset.i != null ? +el.dataset.i : null); break;
     case "paedit": UI.paEdit = JSON.parse(JSON.stringify(ent)); drawParents(); view.querySelector(".pform").scrollIntoView({behavior: "smooth", block: "nearest"}); break;
     case "pacancel": UI.paEdit = null; drawParents(); break;
     case "pasave": paSave(); break;
@@ -1554,7 +1569,7 @@ function paInput(el) {
   if (!d) return;
   if (a === "palabel") d.label = el.value;
   else if (a === "pasc") d.sc = el.value === "" ? null : Math.max(0, Math.round(+el.value) || 0);
-  else if (a === "paw") d.w[+el.dataset.i].s = el.value;
+  else if (a === "paw") { d.w[+el.dataset.i].s = el.value; cbOpen(el, el.value); }
   else return;
   if (f === "c") drawPaCmpT();
 }
@@ -1562,20 +1577,21 @@ function paInput(el) {
 view.addEventListener("keydown", e => {
   const el = e.target;
   if (e.key === "Enter" && el.id === "hq") { e.preventDefault(); hintAdd(); return; }
-  if (el.dataset && el.dataset.act === "pauq") {
-    const k = e.key;
+  if (isCombo(el)) {
+    const k = e.key, w = el.dataset.act === "paw", open = !el.nextElementSibling.hidden;
+    const wi = w ? +el.dataset.i : null;
     if (k === "ArrowDown" || k === "ArrowUp") {
       e.preventDefault();
-      if (el.nextElementSibling.hidden) { cbOpen(el, ""); return; }
+      if (!open) { cbOpen(el, w ? el.value : ""); return; }
       cbHi = Math.max(0, Math.min(cbList.length - 1, cbHi + (k === "ArrowDown" ? 1 : -1)));
       cbDraw(el);
     } else if (k === "Enter") {
       e.preventDefault();
-      if (!el.nextElementSibling.hidden && cbList[cbHi]) cbPick(el.dataset.pf, cbList[cbHi].id);
+      // A white spark with text but nothing in the list is kept as typed; an empty one just adds a row.
+      if (open && cbList[cbHi] && (!w || el.value.trim())) cbPick(el.dataset.pf, cbHi, wi, w);
+      else if (w) paClick("pawadd", el);
     } else if (k === "Escape") { e.preventDefault(); e.stopPropagation(); cbClose(el); }
-    return;
   }
-  if (e.key === "Enter" && el.dataset && el.dataset.act === "paw") { e.preventDefault(); paClick("pawadd", el); }
 });
 
 /* ---------------- Inventory ---------------- */

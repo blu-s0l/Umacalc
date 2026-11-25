@@ -23,6 +23,12 @@ Umamusume: Pretty Derby (Global). One `index.html` in the house style from
 
 ## Decided
 
+- **White sparks come from GameTora's factor list** (2026-11-25; Steve: race sparks were
+  missing, and "Best in Japan" can't be inherited). `D.wf` = skill sparks (447), G1 race sparks
+  (35) and scenario sparks (5 named on Global). Trainee-specific evolved skills have no spark, and
+  neither do gold skills: their white base carries it (Concentration ← Focus). `D.wf.base` maps
+  gold skill id → that white spark, so Hint Sources lists a parent with Focus under Concentration,
+  marked "Focus ★★★". Free text is still accepted in the Parents form.
 - **Hint Sources, first working pass** (2026-11-25). Each tracked skill is its own collapsible
   card (state in `root.plan.open["hs"+id]`): name, surface/distance/style tags, counts, and three
   lists, owned first. Support cards (hint or event, with banners), trainees that learn it (Innate

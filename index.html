@@ -1282,10 +1282,14 @@ const stTxt = n => n ? `<span class="pst">${"★".repeat(n)}</span>` : `<span cl
 const paDraft = tier => ({id: 0, tier, uma: null, label: "", sc: null, b: {t: "", n: 0}, k: {t: "", n: 0}, g: 0, w: []});
 const paDraftOf = f => f === "c" ? UI.paCmp.d : UI.paEdit;
 const skByName = (() => { let m; return n => { if (!m) { m = new Map(); for (const k in D.skills) m.set(D.skills[k][0].toLowerCase(), +k); } return m.get(String(n).trim().toLowerCase()); }; })();
-// White sparks: skills (white and gold) by name; free text is kept too, for race and scenario sparks.
+// White sparks offered: only what can be inherited (D.wf, from GameTora's factor list): skill
+// sparks, G1 race sparks and scenario sparks. Typing anything else is still kept.
 let PSKL = "";
-const paSkillList = () => PSKL || (PSKL = [...new Set(Object.values(D.skills).filter(s => s[1] === 1 || s[1] === 2).map(s => s[0]))]
-  .sort((a, b) => a.localeCompare(b)).map(n => `<option value="${esc(n)}">`).join(""));
+const paSkillList = () => PSKL || (PSKL = (() => {
+  const wf = D.wf || {skill: [], race: [], scen: []};
+  const o = (n, l) => `<option value="${esc(n)}"${l ? ` label="${l}"` : ""}>`;
+  return wf.skill.map(n => o(n)).concat(wf.race.map(n => o(n, "Race")), wf.scen.map(n => o(n, "Scenario"))).join("");
+})());
 const wName = s => { const id = skByName(s.s); return `<span class="${id && skGold(id) ? "gold" : ""}">${esc(s.s)}</span>`; };
 const spTxt = (x, names) => x.t ? `${names[x.t]} ${stTxt(x.n)}` : `<span class="gz">—</span>`;
 const paOpt = e => [paName(e), e.label && UBY[e.uma] ? UBY[e.uma].n : "", e.sc != null ? e.sc.toLocaleString() : ""].filter(Boolean).join(" · ");
@@ -1759,7 +1763,9 @@ function hintSources(id) {
   const umas = UMAS.filter(u => (avail(u) || jpOnly(u)) && (u.in.includes(id) || u.aw.includes(id)))
     .map(u => { const o = root.umas[u.id], k = u.aw.indexOf(id), unlock = k < 0 ? 1 : k + 2; return {u, o, unlock, has: !!o && o.p >= unlock}; })
     .sort((a, b) => (b.has - a.has) || (!!b.o - !!a.o) || a.unlock - b.unlock || a.u.n.localeCompare(b.u.n));
-  const pars = root.par.list.flatMap(e => e.w.filter(w => w.s.toLowerCase() === nm).map(w => ({e, n: w.n})))
+  // A gold skill has no spark of its own: its white base's spark hints it (Concentration ← Focus).
+  const base = ((D.wf && D.wf.base) || {})[id], bn = base ? base.toLowerCase() : null;
+  const pars = root.par.list.flatMap(e => e.w.filter(w => w.s.toLowerCase() === nm || w.s.toLowerCase() === bn).map(w => ({e, n: w.n, via: w.s.toLowerCase() === nm ? "" : base})))
     .sort((a, b) => b.n - a.n || PTIERS.findIndex(t => t[0] === a.e.tier) - PTIERS.findIndex(t => t[0] === b.e.tier));
   return {cards, umas, pars};
 }
@@ -1780,7 +1786,7 @@ function drawHints() {
         <td class="num">${x.o ? `${x.o.s}★ P${x.o.p}` : ""}${x.o && !x.has ? ` <span class="muted">locked</span>` : ""}</td><td class="num">${x.o ? hLv(x.o.h, id) || "" : ""}</td></tr>`).join(""));
     const parT = tbl(`<th>Parent</th><th>Tier</th><th>Spark</th><th class="num">Score</th>`,
       pars.map(p => `<tr><td>${esc(paName(p.e))}${p.e.label && UBY[p.e.uma] ? `<div class="ttl">${esc(UBY[p.e.uma].n)}</div>` : ""}</td><td>${PT[p.e.tier][1]}</td>
-        <td>${stTxt(p.n)}</td><td class="num">${p.e.sc != null ? p.e.sc.toLocaleString() : ""}</td></tr>`).join(""));
+        <td class="nw">${p.via ? esc(p.via) + " " : ""}${stTxt(p.n)}</td><td class="num">${p.e.sc != null ? p.e.sc.toLocaleString() : ""}</td></tr>`).join(""));
     const sub = (n, t) => t ? `<div class="lbl" style="margin:12px 0 2px">${n}</div>${t}` : "";
     return `<div class="card"><details class="sect hsk" data-sec="hs${id}"${root.plan.open["hs" + id] === false ? "" : " open"}><summary>${head}</summary>
       ${sub("Support cards", cardT)}${sub("Trainees", umaT)}${sub("Parents", parT)}${cards.length + umas.length + pars.length ? "" : `<div class="muted">—</div>`}</details></div>`;

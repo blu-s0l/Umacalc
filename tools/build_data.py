@@ -16,7 +16,7 @@ HINT_BOOKS = [160, 161, 162, 163]
 FILES = ["character-cards", "characters", "support-cards", "support_effects", "skills",
          "db-files/support_card_level", "db-files/card_talent_upgrade",
          "en/db-files/card_talent_upgrade", "items", "gacha/support_banners",
-         "gacha/char_banners"]
+         "gacha/char_banners", "factors"]
 
 
 TAGS = (("distance_type", 1, 4), ("running_style", 1, 4), ("ground_type", 1, 2))
@@ -117,6 +117,31 @@ def main(dl):
         if k["id"] in used:
             skills[k["id"]] = [k.get("name_en") or k.get("enname") or k.get("jpname"), k.get("rarity", 1)] + skill_tags(k)
 
+    # White sparks that can actually be inherited: GameTora's factor list, not every skill (a
+    # trainee's own evolved skills, e.g. "Best in Japan", have no spark; nor do gold skills: the
+    # spark is the white base, Focus for Concentration). A skill spark names the skill it grants
+    # (effect type 41); one with no Global name takes that skill's name when it, or its gold
+    # version (id - 1), is in the data above. Race sparks drop story-only races; scenarios keep
+    # named ones.
+    fac = raw["factors"]
+    skname = {k["id"]: k.get("name_en") or k.get("enname") for k in raw["skills"]}
+    def fname(x):
+        return x.get("name_en_gl") or x.get("name_en")
+    wsk, base = [], {}
+    rar = {k["id"]: k.get("rarity", 1) for k in raw["skills"]}
+    for x in fac["skill"]:
+        sid = next((e["value_1"][0] for e in x.get("effects", []) if e.get("type") == 41), None)
+        n = x.get("name_en_gl") or (skname.get(sid) if sid in used or (sid and sid - 1 in used) else None)
+        if n:
+            wsk.append(n.strip())
+            # gold skill id -> the white spark that hints its base (Concentration -> Focus)
+            if sid and sid - 1 in used and rar.get(sid - 1) == 2:
+                base[sid - 1] = n.strip()
+    wrace = [fname(x).strip() for x in fac["race"]
+             if fname(x) and fname(x).isascii() and "Story Race" not in fname(x)]
+    wscen = [fname(x).strip() for x in fac["scenario"] if fname(x)]
+    wf = {"skill": sorted(set(wsk)), "race": wrace, "scen": wscen, "base": base}
+
     effects = {e["id"]: e.get("name_en") or e.get("name_en_eon") for e in raw["support_effects"]}
 
     exp = {1: {}, 2: {}, 3: {}}
@@ -140,12 +165,13 @@ def main(dl):
              for i in raw["items"] if i["id"] in items_used}
 
     out = {"built": datetime.date.today().isoformat(), "chars": chars, "umas": umas, "sups": sups,
-           "skills": skills, "effects": effects, "exp": exp, "talent": talent, "items": items}
+           "skills": skills, "effects": effects, "exp": exp, "talent": talent, "items": items, "wf": wf}
     js = "window.UMA_DATA=" + json.dumps(out, ensure_ascii=False, separators=(",", ":")) + ";\n"
     dest = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "data.js")
     with open(dest, "w", encoding="utf-8") as fh:
         fh.write(js)
     print(f"data.js: {len(umas)} trainees, {len(sups)} supports, {len(skills)} skills, {len(js)//1024} KB")
+    print(f"white sparks: {len(wf['skill'])} skills, {len(wf['race'])} races, {len(wf['scen'])} scenarios")
     fetch_portraits(umas)
 
 

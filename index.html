@@ -333,6 +333,13 @@ td.nw{white-space:nowrap}
 td.wsp{white-space:normal;min-width:240px;max-width:460px;font-size:12px}
 td.wsp .wc{display:inline-block;margin-right:12px;white-space:nowrap}
 table.pcmp td.lbl{display:table-cell}
+/* trainee picker: a text box whose list drops over the page and filters as you type */
+.combo{position:relative}
+.cbox{position:absolute;top:calc(100% + 3px);left:0;right:0;z-index:30;max-height:300px;overflow:auto;background:var(--panel2);
+      border:1px solid rgba(77,159,255,.5);box-shadow:0 8px 24px rgba(0,0,0,.45)}
+button.copt{display:block;width:100%;text-align:left;border:0;border-radius:0;background:none;padding:6px 10px;font-size:13px;white-space:normal}
+button.copt .ttl{display:inline;margin-left:4px}
+button.copt:hover,button.copt.on{background:var(--bluebg);color:var(--tx)}
 /* hint sources: one card per tracked skill; the summary row is the toggle */
 details.hsk>summary{display:flex;align-items:center;gap:6px 12px;flex-wrap:wrap;cursor:pointer;list-style:none}
 details.hsk>summary::-webkit-details-marker{display:none}
@@ -1308,16 +1315,53 @@ function drawParents() {
   if (UI.paTab === "cmp") drawPaCmp(); else drawPaReg();
   UI.paErr = null; UI.paMsg = "";
 }
+// Trainee picker: typing keeps only trainees with the text anywhere in their name; names that
+// start with it come first. Arrows move, Enter or a click picks, Escape or leaving puts back the
+// current pick.
+let cbList = [], cbHi = 0;
+const umaLbl = u => u.n + (u.t ? " · " + u.t : "");
+function cbOpen(inp, q) {
+  const d = paDraftOf(inp.dataset.pf);
+  q = (q || "").trim().toLowerCase();
+  const st = x => x.n.toLowerCase().startsWith(q);
+  cbList = UMAS.filter(x => (avail(x) || x.id === d.uma) && (!q || x.n.toLowerCase().includes(q)))
+    .sort((a, b) => (st(b) - st(a)) || a.n.localeCompare(b.n) || a.t.localeCompare(b.t));
+  cbHi = 0;
+  cbDraw(inp);
+}
+function cbDraw(inp) {
+  const box = inp.nextElementSibling;
+  box.hidden = false;
+  box.innerHTML = cbList.length ? cbList.map((x, i) => `<button type="button" tabindex="-1" class="copt${i === cbHi ? " on" : ""}" data-act="paupick" data-pf="${inp.dataset.pf}" data-id="${x.id}">${esc(x.n)}${x.t ? ` <span class="ttl">${esc(x.t)}</span>` : ""}</button>`).join("")
+    : `<div class="muted" style="padding:6px 10px">No match.</div>`;
+  const on = box.querySelector(".copt.on");
+  if (on) box.scrollTop = Math.max(0, Math.min(box.scrollTop, on.offsetTop), on.offsetTop + on.offsetHeight - box.clientHeight);
+}
+function cbClose(inp) {
+  const d = paDraftOf(inp.dataset.pf), u = d && UBY[d.uma];
+  inp.value = u ? umaLbl(u) : "";
+  inp.nextElementSibling.hidden = true;
+}
+function cbPick(f, id) {
+  paDraftOf(f).uma = id;
+  if (f === "c") drawPaCmp(); else drawParents();
+  const nx = view.querySelector(`input[data-act="palabel"][data-pf="${f}"]`);
+  if (nx) nx.focus();
+}
+view.addEventListener("focusin", e => { const el = e.target; if (el.dataset && el.dataset.act === "pauq") { el.select(); cbOpen(el, ""); } });
+view.addEventListener("focusout", e => { const el = e.target; if (el.dataset && el.dataset.act === "pauq") cbClose(el); });
+// A click in the list mustn't take focus from the box first, or it closes before the click lands.
+view.addEventListener("mousedown", e => { if (e.target.closest(".cbox")) e.preventDefault(); });
+
 // The editor: shared by the register (f "e") and the Compare candidate (f "c").
 function paForm(d, f) {
   const u = UBY[d.uma];
-  const um = UMAS.filter(x => avail(x) || x.id === d.uma).sort((a, b) => a.n.localeCompare(b.n) || a.t.localeCompare(b.t));
-  const st = (fld, n, i) => `<span class="sts">${[1, 2, 3].map(k => `<button class="star${k <= n ? " on" : ""}" data-act="pastar" data-pf="${f}" data-fld="${fld}"${i != null ? ` data-i="${i}"` : ""} data-n="${k}" aria-label="${k} star${k > 1 ? "s" : ""}">★</button>`).join("")}</span>`;
+  const st =(fld, n, i) => `<span class="sts">${[1, 2, 3].map(k => `<button class="star${k <= n ? " on" : ""}" data-act="pastar" data-pf="${f}" data-fld="${fld}"${i != null ? ` data-i="${i}"` : ""} data-n="${k}" aria-label="${k} star${k > 1 ? "s" : ""}">★</button>`).join("")}</span>`;
   const sel = (act, list, v) => `<select data-act="${act}" data-pf="${f}"><option value="">—</option>${list.map(([k, n]) => `<option value="${k}"${k === v ? " selected" : ""}>${n}</option>`).join("")}</select>`;
   const err = UI.paErr && UI.paErr[0] === f ? `<div class="err">${esc(UI.paErr[1])}</div>` : "";
   return `<div class="pform">
     <div class="fields">
-      <div style="grid-column:span 2"><label>Trainee</label><select data-act="pauma" data-pf="${f}"><option value="">—</option>${um.map(x => `<option value="${x.id}"${x.id === d.uma ? " selected" : ""}>${esc(x.n)}${x.t ? " · " + esc(x.t) : ""}</option>`).join("")}</select></div>
+      <div style="grid-column:span 2"><label>Trainee</label><div class="combo"><input data-act="pauq" data-pf="${f}" value="${u ? esc(umaLbl(u)) : ""}" autocomplete="off" spellcheck="false" role="combobox" aria-label="Trainee"><div class="cbox" hidden></div></div></div>
       <div><label>Label</label><input data-act="palabel" data-pf="${f}" value="${esc(d.label)}" maxlength="60"></div>
       <div><label>Score</label><input type="number" min="0" data-act="pasc" data-pf="${f}" value="${d.sc ?? ""}"></div>
       ${f === "e" ? `<div><label>Tier</label>${sel("patier", PTIERS.map(t => [t[0], t[1]]), d.tier).replace('<option value="">—</option>', "")}</div>` : ""}
@@ -1449,7 +1493,8 @@ function paClick(a, el) {
   const redraw = () => f === "c" ? drawPaCmp() : drawParents();
   switch (a) {
     case "patab": UI.paTab = el.dataset.t; UI.paEdit = null; VIEWS.parents(); break;
-    case "panew": UI.paEdit = paDraft(UI.paTab); drawParents(); view.querySelector('select[data-act="pauma"]').focus(); break;
+    case "panew": UI.paEdit = paDraft(UI.paTab); drawParents(); view.querySelector('input[data-act="pauq"]').focus(); break;
+    case "paupick": cbPick(f, id); break;
     case "paedit": UI.paEdit = JSON.parse(JSON.stringify(ent)); drawParents(); view.querySelector(".pform").scrollIntoView({behavior: "smooth", block: "nearest"}); break;
     case "pacancel": UI.paEdit = null; drawParents(); break;
     case "pasave": paSave(); break;
@@ -1490,7 +1535,6 @@ function paChange(a, el) {
   const f = el.dataset.pf, d = f ? paDraftOf(f) : null, v = el.value, c = UI.paCmp;
   const redraw = () => f === "c" || !f ? drawPaCmp() : drawParents();
   switch (a) {
-    case "pauma": d.uma = v ? +v : null; redraw(); break;
     case "pab": d.b.t = v; if (v && !d.b.n) d.b.n = 1; redraw(); break;
     case "pak": d.k.t = v; if (v && !d.k.n) d.k.n = 1; redraw(); break;
     case "patier": d.tier = v; break;
@@ -1506,6 +1550,7 @@ function paChange(a, el) {
 function paInput(el) {
   const a = el.dataset.act, f = el.dataset.pf, d = f ? paDraftOf(f) : null;
   if (el.id === "paq") { UI.paQ = el.value; drawPaList(); return; }
+  if (a === "pauq") { cbOpen(el, el.value); return; }
   if (!d) return;
   if (a === "palabel") d.label = el.value;
   else if (a === "pasc") d.sc = el.value === "" ? null : Math.max(0, Math.round(+el.value) || 0);
@@ -1517,6 +1562,19 @@ function paInput(el) {
 view.addEventListener("keydown", e => {
   const el = e.target;
   if (e.key === "Enter" && el.id === "hq") { e.preventDefault(); hintAdd(); return; }
+  if (el.dataset && el.dataset.act === "pauq") {
+    const k = e.key;
+    if (k === "ArrowDown" || k === "ArrowUp") {
+      e.preventDefault();
+      if (el.nextElementSibling.hidden) { cbOpen(el, ""); return; }
+      cbHi = Math.max(0, Math.min(cbList.length - 1, cbHi + (k === "ArrowDown" ? 1 : -1)));
+      cbDraw(el);
+    } else if (k === "Enter") {
+      e.preventDefault();
+      if (!el.nextElementSibling.hidden && cbList[cbHi]) cbPick(el.dataset.pf, cbList[cbHi].id);
+    } else if (k === "Escape") { e.preventDefault(); e.stopPropagation(); cbClose(el); }
+    return;
+  }
   if (e.key === "Enter" && el.dataset && el.dataset.act === "paw") { e.preventDefault(); paClick("pawadd", el); }
 });
 

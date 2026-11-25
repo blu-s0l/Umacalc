@@ -23,6 +23,10 @@ Umamusume: Pretty Derby (Global). One `index.html` in the house style from
 
 ## Decided
 
+- **Parents trainee picker filters as you type** (2026-11-25; Steve: "Ta" should keep only names
+  containing "ta"). A text box with a drop-down list (`cbOpen`/`cbDraw`), matched on the name only,
+  names starting with the text first. Arrows move, Enter or click picks and moves on to Label,
+  Escape or leaving puts the current pick back. Used in both the register form and Compare.
 - **White sparks come from GameTora's factor list** (2026-11-25; Steve: race sparks were
   missing, and "Best in Japan" can't be inherited). `D.wf` = skill sparks (447), G1 race sparks
   (35) and scenario sparks (5 named on Global). Trainee-specific evolved skills have no spark, and

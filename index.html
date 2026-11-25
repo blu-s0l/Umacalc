@@ -583,7 +583,7 @@ const UI = {tq: "", tShow: [], tShowAll: false, tSort: [["name", 1]], ttSort: [[
                  show: {open: false}},
             sq: "", sType: "", sRar: "", sOwn: "all", sSort: [["score", -1]],
             team: null, teamIdx: 0, hq: "", herr: "",
-            paTab: "p", paEdit: null, paQ: "", paSort: [["sc", -1]], paCmp: {tier: "p", ex: null, d: null}, paErr: null, paMsg: ""};
+            paTab: "p", paEdit: null, paQ: "", paSort: [["sc", -1]], paCmp: {tier: "p", ex: null, cand: null, d: null}, paErr: null, paMsg: ""};
 
 // On Global: released there by GameTora's date, or owned. Owning one proves it's out, so a late or
 // missing Global date in the data never locks a trainee or card out of the roster.
@@ -687,7 +687,7 @@ const WIPE = {
   teams:     ["Delete Teams data", "the Must include, Prefer and Exclude lists", r => { r.team.pins = []; r.team.prefs = []; r.team.excl = []; }],
   trials:    ["Delete Trials data", "the lineup, every recorded match, trained-copy numbers and settled replacements", r => { const s = r.tt.seeded; r.tt = ttNorm(null); r.tt.seeded = s; }],
   decks:     ["Delete Decks data", "every deck", r => { r.decks = []; }],
-  parents:   ["Delete Parents data", "every registered parent, grand-parent and GGP", r => { r.par = parNorm(null); UI.paEdit = null; UI.paCmp = {tier: "p", ex: null, d: null}; }],
+  parents:   ["Delete Parents data", "every registered parent, grand-parent and GGP", r => { r.par = parNorm(null); UI.paEdit = null; UI.paCmp = {tier: "p", ex: null, cand: null, d: null}; }],
   hints:     ["Delete Hint Sources data", "the tracked skill list", r => { r.plan.skills = []; }],
   settings:  ["Reset settings", "every team-building and Trials setting, back to its default", r => { r.cfg = cfgNorm(null); r.team.minG = "B"; r.team.alts = 8; }],
 };
@@ -1440,26 +1440,37 @@ function paCard(e) {
       ${e.w.map(s => `<div class="sprow"><span class="sd w"></span><span class="spn">${wName(s)} ${stTxt(s.n)}</span></div>`).join("")}
     </div></div>`;
 }
+// The candidate is either a new draft or another kept entry (any tier); two kept entries end in
+// deleting one of them.
+const paCand = c => c.cand != null ? root.par.list.find(e => e.id === c.cand && e.id !== c.ex) : null;
 function drawPaCmp() {
   const c = UI.paCmp;
   if (!c.d) c.d = paDraft(c.tier);
   const list = root.par.list.filter(e => e.tier === c.tier);
   if (!list.some(e => e.id === c.ex)) c.ex = null;
-  const ex = list.find(e => e.id === c.ex);
+  const ex = list.find(e => e.id === c.ex), ca = paCand(c);
+  if (!ca) c.cand = null;
+  const others = PTIERS.map(([k, n]) => {
+    const g = root.par.list.filter(e => e.tier === k && e.id !== c.ex);
+    return g.length ? `<optgroup label="${n}">${g.map(e => `<option value="${e.id}"${ca && e.id === ca.id ? " selected" : ""}>${esc(paOpt(e))}</option>`).join("")}</optgroup>` : "";
+  }).join("");
   $("paBody").innerHTML = `<div class="card">
-    <div class="fields" style="max-width:640px">
+    <div class="fields" style="max-width:900px">
       <div><label>Tier</label><select data-act="pactier">${PTIERS.map(([k, n]) => `<option value="${k}"${k === c.tier ? " selected" : ""}>${n}</option>`).join("")}</select></div>
       <div style="grid-column:span 2"><label>Existing</label><select data-act="pacex"><option value="">—</option>${list.map(e => `<option value="${e.id}"${e.id === c.ex ? " selected" : ""}>${esc(paOpt(e))}</option>`).join("")}</select></div>
+      <div style="grid-column:span 2"><label>Candidate</label><select data-act="pacc"><option value="">New</option>${others}</select></div>
     </div>
     <div class="split" style="margin-top:14px">
       <div><div class="head">Existing</div>${ex ? paCard(ex) : `<div class="muted">—</div>`}</div>
-      <div><div class="head">Candidate</div>${paForm(c.d, "c")}</div>
+      <div><div class="head">Candidate${ca && ca.tier !== c.tier ? ` <span class="ttl">${PT[ca.tier][1]}</span>` : ""}</div>${ca ? paCard(ca) : paForm(c.d, "c")}</div>
     </div>
     <div id="paCmpT"></div>
-    <div class="row" style="margin-top:12px">
+    <div class="row" style="margin-top:12px">${ca ? `
+      <button class="danger" data-act="pacdel" data-id="${ex ? ex.id : ""}"${ex ? "" : " disabled"}>Delete${ex ? " " + esc(paName(ex)) : ""}</button>
+      <button class="danger" data-act="pacdel" data-id="${ca.id}">Delete ${esc(paName(ca))}</button>` : `
       <button class="primary" data-act="paadd">Add as new ${PT[c.tier][2]}</button>
       <button data-act="parep"${ex ? "" : " disabled"}>Replace${ex ? " " + esc(paName(ex)) : ""}</button>
-      <button class="danger" data-act="parej">Reject</button>
+      <button class="danger" data-act="parej">Reject</button>`}
     </div>
     ${UI.paMsg ? `<div class="okmsg">${esc(UI.paMsg)}</div>` : ""}
   </div>`;
@@ -1471,7 +1482,7 @@ function drawPaCmpT() {
   if (!box) return;
   const c = UI.paCmp, ex = root.par.list.find(e => e.id === c.ex);
   if (!ex) { box.innerHTML = ""; return; }
-  const d = {...c.d, w: c.d.w.filter(s => s.s.trim())};
+  const d = paCand(c) || {...c.d, w: c.d.w.filter(s => s.s.trim())};
   const dl = (a, b) => a == null || b == null ? "" : `<span class="${b > a ? "pos" : b < a ? "neg" : "flat"}">${b > a ? "+" : ""}${(b - a).toLocaleString()}</span>`;
   const num = v => v != null ? `<span class="mono">${v.toLocaleString()}</span>` : `<span class="gz">—</span>`;
   const rows = [
@@ -1513,7 +1524,14 @@ function paClick(a, el) {
     case "paedit": UI.paEdit = JSON.parse(JSON.stringify(ent)); drawParents(); view.querySelector(".pform").scrollIntoView({behavior: "smooth", block: "nearest"}); break;
     case "pacancel": UI.paEdit = null; drawParents(); break;
     case "pasave": paSave(); break;
-    case "padel": if (ent && confirm(`Delete ${paName(ent)}?`)) { root.par.list = root.par.list.filter(x => x !== ent); if (c.ex === id) c.ex = null; save(); VIEWS.parents(); } break;
+    case "padel": case "pacdel":
+      if (ent && confirm(`Delete ${paName(ent)}?`)) {
+        root.par.list = root.par.list.filter(x => x !== ent);
+        if (c.ex === id) c.ex = null;
+        if (c.cand === id) c.cand = null;
+        if (a === "pacdel") UI.paMsg = `Deleted ${paName(ent)}.`;
+        save(); VIEWS.parents();
+      } break;
     case "pacmp":
       UI.paTab = "cmp"; c.tier = ent.tier; c.ex = ent.id;
       if (!c.d || (!c.d.uma && !c.d.b.t && !c.d.w.length)) { c.d = paDraft(ent.tier); c.d.uma = ent.uma; }
@@ -1554,8 +1572,10 @@ function paChange(a, el) {
     case "pak": d.k.t = v; if (v && !d.k.n) d.k.n = 1; redraw(); break;
     case "patier": d.tier = v; break;
     case "pactier": c.tier = v; c.ex = null; c.d.tier = v; drawPaCmp(); break;
+    case "pacc": c.cand = v ? +v : null; drawPaCmp(); break;
     case "pacex": {
       c.ex = v ? +v : null;
+      if (c.cand === c.ex) c.cand = null;
       const ex = root.par.list.find(x => x.id === c.ex);
       if (ex && !c.d.uma) c.d.uma = ex.uma;
       drawPaCmp(); break;

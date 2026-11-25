@@ -23,6 +23,10 @@ Umamusume: Pretty Derby (Global). One `index.html` in the house style from
 
 ## Decided
 
+- **Compare can weigh two kept entries** (2026-11-25; Steve asked). A Candidate select next to
+  Existing: "New" (the editable draft, as before) or any other kept entry, grouped by tier, so a
+  grand-parent can be weighed against a parent. With a kept candidate the buttons become
+  Delete <existing> / Delete <candidate> (each confirmed); the delta tables work the same.
 - **Parents trainee picker filters as you type** (2026-11-25; Steve: "Ta" should keep only names
   containing "ta"). A text box with a drop-down list (`cbOpen`/`cbDraw`), matched on the name only,
   names starting with the text first. Arrows move, Enter or click picks and moves on to Label,

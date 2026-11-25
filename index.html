@@ -333,6 +333,18 @@ td.nw{white-space:nowrap}
 td.wsp{white-space:normal;min-width:240px;max-width:460px;font-size:12px}
 td.wsp .wc{display:inline-block;margin-right:12px;white-space:nowrap}
 table.pcmp td.lbl{display:table-cell}
+/* hint sources: one card per tracked skill; the summary row is the toggle */
+details.hsk>summary{display:flex;align-items:center;gap:6px 12px;flex-wrap:wrap;cursor:pointer;list-style:none}
+details.hsk>summary::-webkit-details-marker{display:none}
+details.hsk>summary::before{content:"\25B8";color:var(--mut);font-size:11px}
+details.hsk[open]>summary::before{content:"\25BE"}
+details.hsk .hname{font-weight:600;font-size:14px}
+details.hsk .hcnt{font-size:12px;color:var(--sub);margin-left:auto}
+details.hsk>summary>button.x{flex:none}
+details.hsk td.mono{white-space:nowrap}
+.hqrow{display:flex;gap:8px;align-items:center;max-width:420px}
+.hqrow input{flex:1;min-width:0}
+@media(max-width:660px){details.hsk .hcnt{order:3;flex-basis:100%;margin-left:0}details.hsk>summary>button.x{order:2;margin-left:auto}}
 @media(max-width:900px){.slots{grid-template-columns:repeat(3,minmax(0,1fr))}}
 @media(max-width:660px){.split{grid-template-columns:1fr}.wrap{padding:0 12px 60px}.slots{grid-template-columns:repeat(2,minmax(0,1fr))}}
 /* squared corners, as in RCalculator v2: panels and the bubbles that float over them are square;
@@ -561,7 +573,7 @@ const UI = {tq: "", tShow: [], tShowAll: false, tSort: [["name", 1]], ttSort: [[
                  sty:  {on: [], g: "A", any: false, open: false},
                  show: {open: false}},
             sq: "", sType: "", sRar: "", sOwn: "all", sSort: [["score", -1]],
-            team: null, teamIdx: 0, hq: "",
+            team: null, teamIdx: 0, hq: "", herr: "",
             paTab: "p", paEdit: null, paQ: "", paSort: [["sc", -1]], paCmp: {tier: "p", ex: null, d: null}, paErr: null, paMsg: ""};
 
 // On Global: released there by GameTora's date, or owned. Owning one proves it's out, so a late or
@@ -653,7 +665,7 @@ const TABS = [["trainees","Trainees"],["supports","Supports"],["planner","Planne
 const VIEWS = {};
 let tab = "trainees";
 // Tabs that are scaffolding only: flagged so nobody plans around them yet.
-const WIP = new Set(["supports", "decks", "aces", "hints", "inventory"]);
+const WIP = new Set(["supports", "decks", "aces", "inventory"]);
 // What each tab owns, for its red "Delete … data" button: label, what the confirm lists, and the
 // wipe itself. Shared stores are split by owner: Planner keeps targets and its filter, Inventory
 // keeps item and shard counts (Planner's Owned column reads them), Hint Sources keeps its skill
@@ -1500,6 +1512,7 @@ function paInput(el) {
 // Enter in a white spark adds the next one, so a list can be typed straight through.
 view.addEventListener("keydown", e => {
   const el = e.target;
+  if (e.key === "Enter" && el.id === "hq") { e.preventDefault(); hintAdd(); return; }
   if (e.key === "Enter" && el.dataset && el.dataset.act === "paw") { e.preventDefault(); paClick("pawadd", el); }
 });
 
@@ -1716,27 +1729,82 @@ function drawPlanner() {
     `<table><thead><tr><th>Type</th><th>Card</th><th class="num">LB</th><th class="num">Lv</th><th>Target</th><th class="num">Lv</th><th class="num">Copies</th><th class="num">Pts</th></tr></thead><tbody>${srows || `<tr><td colspan="8" class="muted">—</td></tr>`}</tbody></table>`);
   alignPlanner();
 }
-function drawHints() {
-  // Hint finder: every card that teaches a skill by hint or event, owned first, with banner dates.
-  const src = new Map();
-  for (const s of SUPS) for (const id of s.h.concat(s.e)) src.set(id, 1);
-  const names = [...src.keys()].map(id => [id, skName(id)]).sort((a, b) => a[1].localeCompare(b[1]));
-  const blocks = root.plan.skills.map((id, i) => {
-    const cards = SUPS.filter(s => s.h.includes(id) || s.e.includes(id))
-      .filter(s => root.set.jp || s.en || s.b.length)
-      .map(s => ({s, o: own(s), via: s.h.includes(id) ? "Hint" : "Event", bn: banners(s.b)}))
-      .sort((a, b) => (!!b.o - !!a.o) || ((b.o || {}).lb || 0) - ((a.o || {}).lb || 0) || b.s.r - a.s.r);
-    return `<div style="margin-bottom:14px"><div class="row" style="align-items:center"><span class="${skGold(id) ? "gold" : ""}" style="font-weight:600">${esc(skName(id))}</span><button class="x" data-act="hx" data-i="${i}">×</button></div>
-      <div class="scroll"><table><thead><tr><th>Type</th><th>Card</th><th>Via</th><th class="num">Owned</th><th>Global</th><th>Last banner</th><th>Next banner</th></tr></thead><tbody>
-      ${cards.map(c => `<tr class="${c.o ? "" : "off"}"><td><span class="ty">${RAR[c.s.r]} ${TYPE_LBL[c.s.ty]}</span></td><td>${sName(c.s)}</td><td>${c.via}</td>
-        <td class="num">${c.o ? "LB" + c.o.lb : ""}</td><td class="mono">${c.s.en || "—"}</td><td class="mono">${c.bn.last}</td><td class="mono">${c.bn.next}</td></tr>`).join("")}</tbody></table></div></div>`;
-  }).join("");
-  $("pH").innerHTML = `<div class="head">Hint sources</div>${blocks}
-    <div class="row"><div style="width:320px"><input list="skl" id="hq" placeholder="Skill" value="${esc(UI.hq)}"></div><button class="small" data-act="hadd">Add</button></div>
-    <datalist id="skl">${names.map(([id, n]) => `<option value="${esc(n)}"></option>`).join("")}</datalist>`;
+// Hint finder. For each tracked skill, everywhere it can come from: support cards (hint or event),
+// trainees that learn it (innate, or a potential level), and registered parents carrying it as a
+// white spark (inheritance hands out its hint). Owned first in every list.
+const SK_DIST = ["", "Sprint", "Mile", "Medium", "Long"], SK_STY = ["", "Front", "Pace", "Late", "End"], SK_GR = ["", "Turf", "Dirt"];
+const skTags = id => { const [, , ds = [], ss = [], gs = []] = D.skills[id] || []; return [...gs.map(g => SK_GR[g]), ...ds.map(d => SK_DIST[d]), ...ss.map(s => SK_STY[s])].join(" · "); };
+// Skills a hint can be had for: anything a card or a trainee teaches (uniques can't be hinted).
+let HSK = null;
+const hintable = () => HSK || (HSK = (() => {
+  const m = new Map();
+  for (const s of SUPS) for (const id of s.h.concat(s.e)) m.set(id, skName(id));
+  for (const u of UMAS) for (const id of u.in.concat(u.aw)) m.set(id, skName(id));
+  return [...m].filter(([id]) => D.skills[id] && D.skills[id][1] !== 5).sort((a, b) => a[1].localeCompare(b[1]));
+})());
+// Typed name → skill: an exact name (any case) wins, else the one name containing the text.
+function hintFind(q) {
+  q = q.trim().toLowerCase();
+  if (!q) return null;
+  const all = hintable(), ex = all.find(([, n]) => n.toLowerCase() === q);
+  if (ex) return ex[0];
+  const part = all.filter(([, n]) => n.toLowerCase().includes(q));
+  return part.length === 1 ? part[0][0] : part.length ? -part.length : 0;
 }
-// Its own tab for now (moved out of Planner).
-VIEWS.hints = () => { view.innerHTML = `<div class="card" id="pH"></div>`; drawHints(); };
+function hintSources(id) {
+  const nm = skName(id).toLowerCase();
+  const cards = SUPS.filter(s => (s.h.includes(id) || s.e.includes(id)) && (avail(s) || jpOnly(s) || s.b.length))
+    .map(s => ({s, o: own(s), via: s.h.includes(id) ? "Hint" : "Event", bn: banners(s.b)}))
+    .sort((a, b) => (!!b.o - !!a.o) || ((b.o || {}).lb || 0) - ((a.o || {}).lb || 0) || b.s.r - a.s.r);
+  const umas = UMAS.filter(u => (avail(u) || jpOnly(u)) && (u.in.includes(id) || u.aw.includes(id)))
+    .map(u => { const o = root.umas[u.id], k = u.aw.indexOf(id), unlock = k < 0 ? 1 : k + 2; return {u, o, unlock, has: !!o && o.p >= unlock}; })
+    .sort((a, b) => (b.has - a.has) || (!!b.o - !!a.o) || a.unlock - b.unlock || a.u.n.localeCompare(b.u.n));
+  const pars = root.par.list.flatMap(e => e.w.filter(w => w.s.toLowerCase() === nm).map(w => ({e, n: w.n})))
+    .sort((a, b) => b.n - a.n || PTIERS.findIndex(t => t[0] === a.e.tier) - PTIERS.findIndex(t => t[0] === b.e.tier));
+  return {cards, umas, pars};
+}
+function drawHints() {
+  const blocks = root.plan.skills.map(id => {
+    const {cards, umas, pars} = hintSources(id), tags = skTags(id);
+    const nOwn = (list, f) => list.filter(f).length;
+    const cnt = (n, k, o) => `${n} <span class="mono gold">${k}</span>${o != null ? `<span class="muted"> · ${o} owned</span>` : ""}`;
+    const head = `<span class="hname ${skGold(id) ? "gold" : ""}">${esc(skName(id))}</span>${tags ? `<span class="ty">${tags}</span>` : ""}
+      <span class="hcnt">${cnt("Cards", cards.length, nOwn(cards, c => c.o))}<span class="vbar">|</span>${cnt("Trainees", umas.length, nOwn(umas, x => x.o))}<span class="vbar">|</span>${cnt("Parents", pars.length)}</span>
+      <button class="x" data-act="hx" data-id="${id}" aria-label="Stop tracking">×</button>`;
+    const tbl = (h, rows) => rows ? `<div class="scroll"><table><thead><tr>${h}</tr></thead><tbody>${rows}</tbody></table></div>` : "";
+    const cardT = tbl(`<th>Type</th><th>Card</th><th>Via</th><th class="num">Owned</th><th>Global</th><th>Last banner</th><th>Next banner</th>`,
+      cards.map(c => `<tr class="${c.o ? "" : "off"}"><td><span class="ty">${RAR[c.s.r]} ${TYPE_LBL[c.s.ty]}</span></td><td>${sName(c.s)}</td><td>${c.via}</td>
+        <td class="num">${c.o ? "LB" + c.o.lb : ""}</td><td class="mono">${c.s.en || "—"}</td><td class="mono">${c.bn.last}</td><td class="mono">${c.bn.next}</td></tr>`).join(""));
+    const umaT = tbl(`<th>Trainee</th><th>Learns at</th><th class="num">Owned</th><th class="num">Hint Lv</th>`,
+      umas.map(x => `<tr class="${x.o ? "" : "off"}"><td>${uName(x.u)}</td><td class="mono">${x.unlock > 1 ? "P" + x.unlock : "Innate"}</td>
+        <td class="num">${x.o ? `${x.o.s}★ P${x.o.p}` : ""}${x.o && !x.has ? ` <span class="muted">locked</span>` : ""}</td><td class="num">${x.o ? hLv(x.o.h, id) || "" : ""}</td></tr>`).join(""));
+    const parT = tbl(`<th>Parent</th><th>Tier</th><th>Spark</th><th class="num">Score</th>`,
+      pars.map(p => `<tr><td>${esc(paName(p.e))}${p.e.label && UBY[p.e.uma] ? `<div class="ttl">${esc(UBY[p.e.uma].n)}</div>` : ""}</td><td>${PT[p.e.tier][1]}</td>
+        <td>${stTxt(p.n)}</td><td class="num">${p.e.sc != null ? p.e.sc.toLocaleString() : ""}</td></tr>`).join(""));
+    const sub = (n, t) => t ? `<div class="lbl" style="margin:12px 0 2px">${n}</div>${t}` : "";
+    return `<div class="card"><details class="sect hsk" data-sec="hs${id}"${root.plan.open["hs" + id] === false ? "" : " open"}><summary>${head}</summary>
+      ${sub("Support cards", cardT)}${sub("Trainees", umaT)}${sub("Parents", parT)}${cards.length + umas.length + pars.length ? "" : `<div class="muted">—</div>`}</details></div>`;
+  }).join("");
+  const err = UI.herr ? `<div class="err">${esc(UI.herr)}</div>` : "";
+  UI.herr = "";
+  $("pH").innerHTML = `<div class="card"><div class="head">Hint sources</div>
+      <div class="hqrow"><input list="skl" id="hq" placeholder="Skill" value="${esc(UI.hq)}"><button class="small primary" data-act="hadd">Add</button></div>${err}
+      <datalist id="skl">${hintable().map(([, n]) => `<option value="${esc(n)}"></option>`).join("")}</datalist></div>${blocks}`;
+}
+function hintAdd() {
+  const r = hintFind($("hq").value);
+  if (r > 0) {
+    if (!root.plan.skills.includes(r)) root.plan.skills.unshift(r);
+    root.plan.open["hs" + r] = true;
+    UI.hq = ""; save();
+  } else {
+    UI.hq = $("hq").value;
+    UI.herr = r < 0 ? `${-r} skills match; pick one from the list.` : UI.hq.trim() ? "No skill by that name." : "";
+  }
+  drawHints();
+  $("hq").focus();
+}
+VIEWS.hints = () => { view.innerHTML = `<div id="pH"></div>`; drawHints(); };
 
 /* ---------------- Trials (Team Trials log) ---------------- */
 // A match is {t: time, e: [{id, di, sc, pl, v, a}] × 15}: who ran which race, their score, their
@@ -2315,14 +2383,9 @@ function onClick(e) {
         save(); drawTrials();
       }
       break;
-    case "hx": root.plan.skills.splice(i, 1); save(); drawHints(); break;
-    case "hadd": {
-      const n = $("hq").value.trim().toLowerCase();
-      const hit = Object.keys(D.skills).find(k => D.skills[k][0].toLowerCase() === n && SUPS.some(s => s.h.includes(+k) || s.e.includes(+k)));
-      if (hit && !root.plan.skills.includes(+hit)) root.plan.skills.push(+hit);
-      UI.hq = hit ? "" : $("hq").value;
-      save(); drawHints(); break;
-    }
+    // × sits in the skill's <summary>; don't let it toggle the block.
+    case "hx": e.preventDefault(); root.plan.skills = root.plan.skills.filter(x => x !== id); delete root.plan.open["hs" + id]; save(); drawHints(); break;
+    case "hadd": hintAdd(); break;
     case "qa": SUPS.forEach(s => { if (avail(s) && s.r === +el.dataset.r) root.sups[s.id] = {lb: 4}; }); save(); msg("Added."); break;
     case "qu": UMAS.forEach(u => { if (avail(u) && u.r < 3 && !root.umas[u.id]) root.umas[u.id] = {s: u.r, p: 1}; }); save(); msg("Added."); break;
     case "exp": {

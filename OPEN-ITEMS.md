@@ -23,6 +23,13 @@ Umamusume: Pretty Derby (Global). One `index.html` in the house style from
 
 ## Decided
 
+- **Hint Sources, first working pass** (2026-11-25). Each tracked skill is its own collapsible
+  card (state in `root.plan.open["hs"+id]`): name, surface/distance/style tags, counts, and three
+  lists, owned first. Support cards (hint or event, with banners), trainees that learn it (Innate
+  or P2–P5, owned stars/potential, "locked" below the level, hint Lv), and registered parents
+  carrying it as a white spark (matched by name, any case). The skill box takes any case and a
+  unique part of a name; Enter adds; uniques are excluded. Newest skill goes on top. No longer
+  under construction.
 - **Parents tab** (2026-11-15). Sub-tabs Parents, Grand-Parents, GGP and Compare. An entry is a
   trainee, a label, the in-game score (to find it in the game's list), a blue spark, a pink spark,
   the green (always the trainee's own unique; 0 stars = none) and any number of whites (typed by
